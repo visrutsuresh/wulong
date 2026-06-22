@@ -1,0 +1,4 @@
+{
+  "block_enabled": false,
+  "_comment": "v1: log-only mode. Set block_enabled=true to promote violations to blocking (exits non-zero). Only affects MISSING_RECEIPT and MISSING_CHANGELOG violations — gate/skill/bus violations are always WARN-only regardless of this setting."
+}
