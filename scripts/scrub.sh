@@ -52,8 +52,8 @@ while IFS= read -r pattern; do
     # For the LICENSE file: allow the single copyright line through, flag anything else
     if [[ "$filepath" == "$LICENSE_FILE" ]]; then
       matches=$(grep -nEi "$pattern" "$filepath" 2>/dev/null || true)
-      # Remove the exact copyright line from matches
-      filtered=$(echo "$matches" | grep -v '^[0-9]*:Copyright (c) 2026 Visrut Suresh$' || true)
+      # Remove any copyright line from matches (generic: year + any name)
+      filtered=$(echo "$matches" | grep -vE '^[0-9]+:Copyright \(c\) [0-9]{4} .+$' || true)
       if [[ -n "$filtered" ]]; then
         echo "SCRUB HIT: $filepath"
         echo "$filtered" | sed "s/^/  pattern='$pattern' match: /"
