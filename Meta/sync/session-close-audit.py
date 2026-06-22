@@ -14,8 +14,7 @@ ADR-007 extension (gated-worker predecessor check, WARN-only per pilot scope):
     - coder    → contrarian receipt with review_mode=plan, review_verdict=PASS
     - deployer → tester receipt with status=DONE
   Missing predecessor = GATED_WORKER_NO_PREDECESSOR violation (WARN-only).
-  This is a DETECTIVE check — it fires after the worker already ran, catching
-  anything the preventive spawn_gate wrapper missed.
+  This is a DETECTIVE check — it fires after the worker already ran.
 
 Usage:
   python3 session-close-audit.py            # default 60-min window
@@ -75,7 +74,7 @@ def _init_paths(root: str) -> None:
 
 
 # Agents exempt from receipt requirement (light I/O, no per-task receipt convention)
-EXEMPT_AGENTS = {"session-guard", "watch-meta", "compile-context", "cron", "system"}
+EXEMPT_AGENTS = {"session-guard", "watch-meta", "cron", "system"}
 
 CHANGE_LINE_RE = re.compile(
     r"^\[(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2})\]\s+([a-z][a-z0-9_-]+)\s*[→\-]"
