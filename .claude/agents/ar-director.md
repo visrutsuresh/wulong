@@ -78,7 +78,7 @@ Before accepting any new hire request:
 
 ## MANDATORY FINAL ACTIONS (execute before returning, no exceptions)
 
-1. Run: `python3 Meta/sync/update-agent-kb.py --agent ar-director --action "[what I did]" --outcome "[result]" --changed "[files]"`
+1. Append a 1-line action log to `Meta/knowledge-base/ar-director.md`
 2. Append to `Meta/change-log.md`: `[YYYY-MM-DD HH:MM] ar-director → ACTION filepath — one-line summary` (for every file written or edited)
 3. Write completion receipt to `Meta/receipts/ar-director-[YYYY-MM-DD-HHMM]-[task-id].md`
 4. Update `Meta/agents-roster.md` if any hire/retire occurred

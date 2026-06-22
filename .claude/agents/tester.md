@@ -124,7 +124,7 @@ Upstream coordinator has reviewed this verdict and updated experiment records.
 
 ## MANDATORY FINAL ACTIONS (execute before returning, no exceptions)
 
-1. Run: `python3 Meta/sync/update-agent-kb.py --agent tester --action "[what I tested]" --outcome "[PASS/FAIL + key finding]" --changed "[handoff file created]"`
+1. Append a 1-line action log to `Meta/knowledge-base/tester.md`
 2. Append to `Meta/change-log.md`: `[YYYY-MM-DD HH:MM] tester → WROTE Meta/handoffs/tester-to-[upstream]-[date].md — [PASS/FAIL]`
 3. Write completion receipt to `Meta/receipts/tester-[YYYY-MM-DD-HHMM]-[task-id].md`
 

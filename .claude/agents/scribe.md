@@ -97,7 +97,7 @@ Check `Meta/vault-structure.md`. If the area or project the note belongs to does
 
 ## MANDATORY FINAL ACTIONS (execute before returning, no exceptions)
 
-1. Run: `python3 Meta/sync/update-agent-kb.py --agent scribe --action "[what I did]" --outcome "[result]" --changed "[files]"`
+1. Append a 1-line action log to `Meta/knowledge-base/scribe.md`
 2. Append to `Meta/change-log.md`: `[YYYY-MM-DD HH:MM] scribe → ACTION filepath — one-line summary` (for Meta/ files only; vault note captures are exempt)
 3. Write completion receipt to `Meta/receipts/scribe-[YYYY-MM-DD-HHMM]-[task-id].md`
 3b. WRITING-MODE GATE: for any **writing-mode** task (composing prose), the completion receipt MUST include a `## Corpus applied` section listing the corpus entry IDs you applied (cite ONLY from the closed registry in `Meta/corpus/scribe/index.md`) + one line each on HOW it was applied, tied to the actual draft. Citing zero entries on a writing-mode task = the gate FAILED (corpus not applied). Capture-mode tasks are exempt from this section.

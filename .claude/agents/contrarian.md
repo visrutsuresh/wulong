@@ -230,7 +230,7 @@ Review complete: [PASS/SOFT FAIL/HARD FAIL] — [one-line reason]
 
 ## MANDATORY FINAL ACTIONS (execute before returning, no exceptions)
 
-1. Run: `python3 Meta/sync/update-agent-kb.py --agent contrarian --action "[hypothesis reviewed]" --outcome "[PASS/SOFT FAIL/HARD FAIL]" --changed "[vault note created]"`
+1. Append a 1-line action log to `Meta/knowledge-base/contrarian.md`
 2. Append to `Meta/change-log.md`: `[YYYY-MM-DD HH:MM] contrarian → WROTE Meta/handoffs/contrarian-to-[upstream]-[date].md — verdict: [PASS/FAIL]`
 3. Write completion receipt to `Meta/receipts/contrarian-[YYYY-MM-DD-HHMM]-[task-id].md`
 

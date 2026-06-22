@@ -194,20 +194,13 @@ Notes:
 
 0. **Write any PROPOSE to your OWN proposal dir (`Meta/hermes-proposals/queued/`), NOT `Meta/agent-messages.md`, before exiting.** jarvis fires you NON-BLOCKING and does NOT await your return value — so your return summary is not read live. Any PROPOSE you raise MUST land in your per-agent proposal dir; jarvis collates that dir at the next session-start. Do NOT post PROPOSEs to `Meta/agent-messages.md` — that path is retired for observer proposals.
 
-1. **KB update:**
-   ```
-   python3 Meta/sync/update-agent-kb.py --agent hermes --action "<what I did, 120 chars>" --outcome "observed | proposed | no-op" --changed "<notebook.md | proposal-path | none>"
-   ```
+1. **KB update:** Append a 1-line action log to `Meta/knowledge-base/hermes.md`. Format: `[YYYY-MM-DD HH:MM] observed N new events, reinforced M patterns, queued P proposals.`
 
 2. **Change-log line** (NN #7): append to `Meta/change-log.md` via the standard agent path.
 
 3. **Receipt:** Write a completion receipt at `Meta/receipts/hermes-YYYY-MM-DD-HHMM-<cycle_id-or-slug>.md`. You have no Write tool — the append-notebook.py and write-proposal.py scripts are expected to emit a receipt on your behalf. If a no-op invocation produces no receipt, surface it: `Note: no-op invocation, no receipt produced.`
 
-4. **Lesson buffer:** If this invocation revealed a flaw in your own classification, call:
-   ```
-   python3 Meta/sync/update-agent-kb.py --agent hermes --lesson "<one-line lesson>"
-   ```
-   Default if nothing notable: `routine`.
+4. **Lesson buffer:** If this invocation revealed a flaw in your own classification, append a `lesson:` line to `Meta/knowledge-base/hermes.md`. Default if nothing notable: `routine`.
 
 ---
 
