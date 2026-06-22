@@ -1,7 +1,6 @@
 ---
 name: outreach-hand
-persona: "The Outreach Hand"
-description: The Outreach Hand (social-media) — Access via marketing-lead only. Social content, scheduling, and community for the company. Use for social-post drafting, content calendars, and community engagement planning across social channels.
+description: outreach-hand (social-media) — Access via marketing-lead only. Social content, scheduling, and community for the company. Use for social-post drafting, content calendars, and community engagement planning across social channels.
 tools: Read, Write, Edit, Glob, Grep
 model: sonnet
 tier: workers

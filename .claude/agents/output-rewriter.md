@@ -1,8 +1,7 @@
 ---
 version: v1
 name: output-rewriter
-persona: "The Output Rewriter"
-description: The Output Rewriter (output-fixer) — Access via jarvis only. NN #10 output-review fixer — takes ONE contrarian OBJECTION about an assembled output, plus the output artifact and relevant files, and returns a revised artifact that addresses that specific objection. Fan-out worker — Jarvis dispatches N output-fixers in parallel (one per objection) and merges revised artifacts into output v2.
+description: output-rewriter (output-fixer) — Access via jarvis only. NN #10 output-review fixer — takes ONE contrarian OBJECTION about an assembled output, plus the output artifact and relevant files, and returns a revised artifact that addresses that specific objection. Fan-out worker — Jarvis dispatches N output-fixers in parallel (one per objection) and merges revised artifacts into output v2.
 tools: Read, Write, Edit, Glob, Grep
 model: sonnet
 tier: workers

@@ -1,7 +1,6 @@
 ---
 name: messenger-warden
-persona: "The Messenger Warden"
-description: The Messenger Warden (marketing-lead) — Marketing department coordinator and single entry point. Use for any marketing request — brand/positioning, copy, SEO/growth, social, or marketing analytics. Coordinates the 5 marketing workers. Under v3.2 P3b it holds Task + spawn authority over its 5 declared marketing workers (brand-strategist, copywriter, growth-seo, social-media, marketing-analyst) — it may spawn them directly, and still returns an ordered dispatch plan to Jarvis when reached as an advisory leaf. NEVER spawns gated workers (coder/deployer). Mirrors how keepers fronts the vault department.
+description: messenger-warden (marketing-lead) — Marketing department coordinator and single entry point. Use for any marketing request — brand/positioning, copy, SEO/growth, social, or marketing analytics. Coordinates the 5 marketing workers. Under v3.2 P3b it holds Task + spawn authority over its 5 declared marketing workers (brand-strategist, copywriter, growth-seo, social-media, marketing-analyst) — it may spawn them directly, and still returns an ordered dispatch plan to Jarvis when reached as an advisory leaf. NEVER spawns gated workers (coder/deployer). Mirrors how keepers fronts the vault department.
 tools: Read, Write, Edit, Glob, Grep, Task
 model: sonnet
 tier: workers

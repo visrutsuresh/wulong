@@ -1,8 +1,7 @@
 ---
 version: v1
 name: on-chain-reader
-persona: "The On-Chain Reader"
-description: The On-Chain Reader (crypto) — Access via company-orchestrator only. Market data source assessor specialising in on-chain and derivatives data. Use when evaluating new data sources — funding rates, open interest, liquidations, dominance metrics, exchange flow, order book data. Assesses data quality and feasibility before data-scientist or coder touches a new data source. Does not write production code — produces data source assessments and API specs.
+description: on-chain-reader (crypto) — Access via company-orchestrator only. Market data source assessor specialising in on-chain and derivatives data. Use when evaluating new data sources — funding rates, open interest, liquidations, dominance metrics, exchange flow, order book data. Assesses data quality and feasibility before data-scientist or coder touches a new data source. Does not write production code — produces data source assessments and API specs.
 tools: Read, Write, WebSearch, WebFetch, Bash, Glob, Grep
 model: sonnet
 tier: workers

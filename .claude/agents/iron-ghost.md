@@ -1,8 +1,7 @@
 ---
 version: v1
 name: iron-ghost
-persona: "The Iron Ghost"
-description: "The Iron Ghost (security-specialist) — Access via company-orchestrator only. Owns the company's security posture: secrets and API-key management and rotation, server hardening, access control, dependency and supply-chain (CVE) checks, and the pre-go-live security audit. Use for: rotating credentials, defining secret-handling standards, hardening servers, reviewing access control, scanning dependencies for known vulnerabilities, or running a pre-go-live security audit. Recurring mandate (ongoing rotation + CVE watch + audits), not one-time work. Coordinates with execution-engineer on credential handling and with deployer on how secrets are delivered at deploy time."
+description: "iron-ghost (security-specialist) — Access via company-orchestrator only. Owns the company's security posture: secrets and API-key management and rotation, server hardening, access control, dependency and supply-chain (CVE) checks, and the pre-go-live security audit. Use for: rotating credentials, defining secret-handling standards, hardening servers, reviewing access control, scanning dependencies for known vulnerabilities, or running a pre-go-live security audit. Recurring mandate (ongoing rotation + CVE watch + audits), not one-time work. Coordinates with execution-engineer on credential handling and with deployer on how secrets are delivered at deploy time."
 tools: Read, Write, Edit, Glob, Grep, Bash
 model: sonnet
 tier: workers
