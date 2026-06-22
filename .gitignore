@@ -1,0 +1,13 @@
+.env
+*.pkl
+*.joblib
+*.pt
+*.onnx
+*.plist
+.DS_Store
+secrets
+*.key
+*.pem
+__pycache__/
+.obsidian/
+Private/
