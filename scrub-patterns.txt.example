@@ -1,0 +1,36 @@
+# scrub-patterns.txt.example
+#
+# Copy this file to scrub-patterns.txt and fill in YOUR private tokens.
+# scrub-patterns.txt is gitignored and never committed.
+#
+# Each non-blank, non-comment line is a case-insensitive extended-regex (grep -Ei).
+# A match in any tracked file (except the excluded tooling files) causes scrub.sh to exit 1.
+#
+# Usage:
+#   cp scrub-patterns.txt.example scrub-patterns.txt
+#   # Edit scrub-patterns.txt and replace each <placeholder> with your real value.
+#   bash scripts/scrub.sh
+
+# --- Server / infrastructure ---
+<your-server-ip>           # e.g. 203\.0\.113\.1 (escape dots for regex)
+/Users/<your-username>     # macOS home path leak
+
+# --- Personal identity ---
+<your-username>            # lowercase username (e.g. johndoe)
+\b<YourFirstName>\b        # first name word-boundary match
+\b<YourLastName>\b         # last name word-boundary match
+<your-employer>            # company / school name
+
+# --- Project codenames ---
+<your-project-name>        # internal project names you don't want published
+<your-prop-firm>           # e.g. FirmA|FirmB (pipe-separated alternatives)
+
+# --- Secrets and tokens ---
+TELEGRAM_BOT_TOKEN\s*=\s*\S   # env-var assignment with a value
+[A-Za-z0-9._%+-]+@(gmail|outlook|yahoo|hotmail|proton)[a-z.]+  # personal email
+
+# --- Financial amounts (optional: flag large dollar amounts in text files) ---
+# \$\s?\d{3,}
+
+# --- Social / handle ---
+# @<your-handle>
