@@ -11,3 +11,4 @@ secrets
 __pycache__/
 .obsidian/
 Private/
+scrub-patterns.txt
