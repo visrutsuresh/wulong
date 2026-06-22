@@ -12,3 +12,5 @@ __pycache__/
 .obsidian/
 Private/
 scrub-patterns.txt
+Meta/sync/*.db
+Meta/doctor/
