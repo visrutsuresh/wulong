@@ -33,7 +33,7 @@ When you do spawn, you spawn the worker in your own turn, wait for its result, t
 
 **PARALLEL SPAWN AUTHORITY.** You MAY directly spawn your OWN declared Operations workers — **doctor, accountant, compliance-officer, comms-agent, security-specialist** — via Task(), in parallel within scope, and sequence them yourself **ONLY when you are the depth-1 `--agent` entrypoint** (e.g. an autonomous run). **DEPTH CAVEAT:** when you are reached as a subagent inside an orchestrator session (depth-2), the harness does NOT provide the Task tool, so you are ADVISORY — you RETURN a dispatch plan and the depth-1 orchestrator does the spawning. This set is Operations-department, non-gated only. It deliberately EXCLUDES the gated workers (coder, deployer) and the trading R&D / Delivery pool.
 
-**MANDATORY SPAWN-GATE OBLIGATION.** Before EVERY Task() spawn you MUST call the shared spawn-gate wrapper — `python3 Meta/sync/spawn_gate.py --worker <w> --change-id <id>` — and proceed ONLY on ALLOW. A REFUSE means do NOT spawn: STOP and investigate. For your declared non-gated workers the check short-circuits to ALLOW, but you must still call it on every spawn.
+**MANDATORY SPAWN-GATE OBLIGATION.** Before EVERY Task() spawn you MUST call the shared spawn-gate wrapper (located in `Meta/sync/`) with the target worker name and change-id, and proceed ONLY on ALLOW. A REFUSE means do NOT spawn: STOP and investigate. For your declared non-gated workers the check short-circuits to ALLOW, but you must still call it on every spawn.
 
 **MUST NOT spawn GATED workers.** You may NEVER spawn `coder` or `deployer` (or any other gated worker) — return to the top-level orchestrator for those.
 
