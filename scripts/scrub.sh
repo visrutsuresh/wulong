@@ -10,7 +10,9 @@ PATTERNS="$REPO_ROOT/scrub-patterns.txt"
 SCAN_PATH="${1:-$REPO_ROOT}"
 
 if [[ ! -f "$PATTERNS" ]]; then
-  echo "ERROR: scrub-patterns.txt not found at $PATTERNS" >&2
+  echo "ERROR: scrub-patterns.txt not found." >&2
+  echo "  Run: cp scrub-patterns.txt.example scrub-patterns.txt" >&2
+  echo "  Then fill in your private tokens before running scrub." >&2
   exit 1
 fi
 
