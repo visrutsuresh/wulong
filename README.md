@@ -58,7 +58,10 @@ git clone https://github.com/wulong/wulong.git .
 ```
 
 Then configure your agent identities and adapt `CLAUDE.md` to your context.
-Agent definitions live in `.claude/agents/` (Phase B, not included here).
+Agent definitions for all 65 agents ship in `.claude/agents/` — each file is
+named by machine ID (e.g. `jarvis.md`, `contrarian.md`, `coder.md`) and the
+`name:` frontmatter field matches the filename stem so routing works without
+further configuration.
 
 ## Structure
 
@@ -69,7 +72,7 @@ CLAUDE.md                -- Policy layer: Non-Negotiables 1-21
   skills/                -- Curated agent skills (ponytail, plain-English)
 Meta/
   sync/                  -- Governance scripts (receipt validation, audit, scrub)
-  templates/             -- Blank receipt and playbook templates
+  receipts/              -- Completion receipts (one per task, see Cerebrum)
   brain.md               -- Foundational state (fill in for your context)
   change-log.md          -- Append-only audit trail
   vault-structure.md     -- Where things live and why
