@@ -76,7 +76,7 @@ Meta/
 scripts/
   scrub.sh               -- Pre-publish sensitive-pattern scan
   pre-publish-assert.sh  -- Pre-push safety assertion
-scrub-patterns.txt       -- Deny-list for scrub.sh
+scrub-patterns.txt.example -- Deny-list template (cp scrub-patterns.txt.example scrub-patterns.txt then fill in your tokens)
 ```
 
 ## License

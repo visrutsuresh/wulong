@@ -25,12 +25,6 @@ else
 fi
 
 # CHECK (b): all commit authors match pinned pseudonym
-BAD_COMMITS=$(git -C "$REPO_ROOT" log --format="%H %ae %an" 2>/dev/null | \
-  grep -v "^$PINNED_AUTHOR_EMAIL " | \
-  awk -v email="$PINNED_AUTHOR_EMAIL" -v name="$PINNED_AUTHOR_NAME" \
-    '$2 != email || $3 != name {print}' || true)
-
-# Re-check using git log properly
 BAD_COMMITS=$(git -C "$REPO_ROOT" log --format="%H|%ae|%an" 2>/dev/null | while IFS='|' read -r hash email name; do
   if [[ "$email" != "$PINNED_AUTHOR_EMAIL" || "$name" != "$PINNED_AUTHOR_NAME" ]]; then
     echo "$hash author=$name <$email>"

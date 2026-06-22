@@ -60,10 +60,11 @@ Never commit one large dump. Each commit should be reviewable in isolation.
 
 ## Pattern deny-list
 
-`scrub-patterns.txt` holds the deny-list of patterns the scrub checks. Each
-line is a case-insensitive regex. To add a pattern: add a line, run the scrub
-over the whole tree to confirm no existing files match, then commit the updated
-deny-list as a standalone `chore:` commit.
+`scrub-patterns.txt` holds the deny-list of patterns the scrub checks (create it
+from the template first: `cp scrub-patterns.txt.example scrub-patterns.txt`, then
+fill in your private tokens). Each line is a case-insensitive regex. To add a
+pattern: add a line, run the scrub over the whole tree to confirm no existing
+files match, then commit the updated deny-list as a standalone `chore:` commit.
 
 ### Copyright exemption
 
