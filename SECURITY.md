@@ -40,8 +40,9 @@ This checks three things:
 - (a) No git remote is configured (no accidental push to a public remote).
 - (b) All commits are authored under the pinned pseudonym (`wulong / vault@local`),
   not a personal identity.
-- (c) The commit count is at least the expected minimum for the current phase,
-  confirming no commits were lost or squashed accidentally.
+- (c) The scrub deny-list in `scrub-patterns.txt` is clean across all
+  git-tracked files (the inlined pattern scan, equivalent to `scripts/scrub.sh`
+  but scoped to tracked files only).
 
 All three checks must PASS before pushing.
 
