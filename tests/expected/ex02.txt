@@ -1,0 +1,2 @@
+[REFUSE] gate=nn3 change_id=example-2026 — no contrarian receipt with agent=contrarian, review_mode=plan, review_verdict=PASS found for change_id — coder spawn REFUSED
+example 02: PASS
