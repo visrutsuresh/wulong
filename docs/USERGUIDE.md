@@ -160,8 +160,7 @@ usernames here.
 ```
 my-real-api-token
 my-username
-/Users/realname/
-76\.13\.190\.43
+my-server-ip-address
 ```
 
 ## Adapting the agent definitions

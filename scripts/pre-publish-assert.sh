@@ -51,15 +51,21 @@ if [[ ! -f "$PATTERNS" ]]; then
   FAILURES=$((FAILURES + 1))
 else
   SCRUB_FOUND=0
-  # Tooling files that legitimately contain the deny-list patterns
+  # Tooling files that legitimately contain the deny-list patterns.
+  # .github/ is also excluded: CI runner names (e.g. ubuntu-latest) may
+  # substring-match personal patterns like NTU — those are false positives.
   EXCLUDED=(
     "$REPO_ROOT/scrub-patterns.txt"
     "$REPO_ROOT/scripts/scrub.sh"
     "$REPO_ROOT/scripts/pre-publish-assert.sh"
   )
+  EXCLUDED_PREFIXES=(
+    "$REPO_ROOT/.github/"
+  )
   is_excluded() {
     local f="$1"
     for exc in "${EXCLUDED[@]}"; do [[ "$f" == "$exc" ]] && return 0; done
+    for prefix in "${EXCLUDED_PREFIXES[@]}"; do [[ "$f" == "$prefix"* ]] && return 0; done
     return 1
   }
 
