@@ -6,15 +6,17 @@
 # Checks:
 #   (a) no remote configured
 #   (b) all commit authors match pinned pseudonym
-#   (c) scrub deny-list clean (inlined from scrub.sh — scrub is the guard, not commit count)
+#   (c) scrub deny-list clean on git-tracked files (gitignored runtime files are not published)
 
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PATTERNS="$REPO_ROOT/scrub-patterns.txt"
 FAILURES=0
 
 PINNED_AUTHOR_NAME="wulong"
 PINNED_AUTHOR_EMAIL="vault@local"
+LICENSE_FILE="$REPO_ROOT/LICENSE"
 
 echo "=== pre-publish-assert.sh ==="
 
@@ -41,15 +43,59 @@ else
   echo "PASS (b): all commits authored by $PINNED_AUTHOR_NAME <$PINNED_AUTHOR_EMAIL>."
 fi
 
-# CHECK (c): scrub deny-list clean
-SCRUB_RESULT=$(bash "$REPO_ROOT/scripts/scrub.sh" "$REPO_ROOT" 2>&1)
-SCRUB_EXIT=$?
-if [[ "$SCRUB_EXIT" -ne 0 ]]; then
-  echo "FAIL (c): scrub deny-list found sensitive patterns:"
-  echo "$SCRUB_RESULT"
+# CHECK (c): scrub deny-list clean on git-tracked files only.
+# Gitignored files (e.g. Meta/doctor/ runtime logs) are not published and not scanned.
+# LICENSE: the single copyright line is allowed through (open-source attribution norm).
+if [[ ! -f "$PATTERNS" ]]; then
+  echo "FAIL (c): scrub-patterns.txt not found — run: cp scrub-patterns.txt.example scrub-patterns.txt"
   FAILURES=$((FAILURES + 1))
 else
-  echo "PASS (c): scrub deny-list clean."
+  SCRUB_FOUND=0
+  # Tooling files that legitimately contain the deny-list patterns
+  EXCLUDED=(
+    "$REPO_ROOT/scrub-patterns.txt"
+    "$REPO_ROOT/scripts/scrub.sh"
+    "$REPO_ROOT/scripts/pre-publish-assert.sh"
+  )
+  is_excluded() {
+    local f="$1"
+    for exc in "${EXCLUDED[@]}"; do [[ "$f" == "$exc" ]] && return 0; done
+    return 1
+  }
+
+  while IFS= read -r pattern; do
+    [[ -z "$pattern" || "$pattern" == \#* ]] && continue
+    while IFS= read -r rel; do
+      filepath="$REPO_ROOT/$rel"
+      is_excluded "$filepath" && continue
+      [[ ! -f "$filepath" ]] && continue
+      file "$filepath" | grep -q "text" || continue
+
+      if [[ "$filepath" == "$LICENSE_FILE" ]]; then
+        # Allow the single copyright line; flag any other match
+        matches=$(grep -nEi "$pattern" "$filepath" 2>/dev/null || true)
+        filtered=$(printf '%s\n' "$matches" | grep -vE '^[0-9]+:Copyright \(c\) [0-9]{4} .+$' || true)
+        if [[ -n "$filtered" ]]; then
+          echo "SCRUB HIT (c): $rel"
+          printf '%s\n' "$filtered" | head -3 | sed 's/^/  /'
+          SCRUB_FOUND=1
+        fi
+      else
+        if grep -qEi "$pattern" "$filepath" 2>/dev/null; then
+          echo "SCRUB HIT (c): $rel"
+          grep -nEi "$pattern" "$filepath" | head -3 | sed 's/^/  /'
+          SCRUB_FOUND=1
+        fi
+      fi
+    done < <(git -C "$REPO_ROOT" ls-files)
+  done < "$PATTERNS"
+
+  if [[ "$SCRUB_FOUND" -eq 1 ]]; then
+    echo "FAIL (c): scrub deny-list found sensitive patterns in tracked files."
+    FAILURES=$((FAILURES + 1))
+  else
+    echo "PASS (c): scrub deny-list clean on all git-tracked files."
+  fi
 fi
 
 echo "==="
