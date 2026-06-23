@@ -28,10 +28,10 @@ pytest tests/
 ```
 
 There are three test files:
-- `tests/test_imports.py` — mechanical guard that every `wulong/sync/` script
+- `tests/test_imports.py`: mechanical guard that every `wulong/sync/` script
   imports without error. Run after adding or removing a script.
-- `tests/test_cli.py` — four tests covering `init`, `doctor`, `gate`, `pulse`.
-- `tests/test_scrub.py` — scrub dry-run over `examples/` to verify no
+- `tests/test_cli.py`: four tests covering `init`, `doctor`, `gate`, `pulse`.
+- `tests/test_scrub.py`: scrub dry-run over `examples/` to verify no
   sensitive patterns slipped in.
 
 Zero skips is the standard. A skip is treated as a failure in CI.
@@ -86,12 +86,12 @@ describes the hire-agent playbook in its `## SOP` section.
 ## Commit style
 
 Use conventional prefixes:
-- `feat:` — new feature or capability
-- `fix:` — bug fix
-- `chore:` — tooling, config, dependency
-- `docs:` — documentation only
-- `refactor:` — restructuring without behaviour change
-- `data:` — model retrain, CSV update, baseline change
+- `feat:` new feature or capability
+- `fix:` bug fix
+- `chore:` tooling, config, dependency
+- `docs:` documentation only
+- `refactor:` restructuring without behaviour change
+- `data:` model retrain, CSV update, baseline change
 
 Keep commits small and focused. One logical change per commit.
 

@@ -5,7 +5,7 @@
 
 # wulong
 
-A working multi-agent governance framework for Claude Code — every change reviewed, every deploy verified, every decision logged.
+A working multi-agent governance framework for Claude Code: every change reviewed, every deploy verified, every decision logged.
 
 <!-- PLACEHOLDER: repo path below uses <your-github-username>/wulong. Replace before publishing. -->
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
@@ -104,10 +104,10 @@ export WULONG_ROOT=/path/to/your/vault
 
 After `wulong init`, edit these files to fit your setup:
 
-- `.env` — env knobs (WULONG_ROOT, project paths, Telegram token if used)
-- `.wulong/projects.json` — per-project config consumed by `compile-context.py`
-- `Meta/brain.md` — your living world-state (agents read this for context)
-- `scrub-patterns.txt` — personal tokens/patterns to block before any push
+- `.env`: env knobs (WULONG_ROOT, project paths, Telegram token if used)
+- `.wulong/projects.json`: per-project config consumed by `compile-context.py`
+- `Meta/brain.md`: your living world-state (agents read this for context)
+- `scrub-patterns.txt`: personal tokens/patterns to block before any push
 
 ## CLI reference
 

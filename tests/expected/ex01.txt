@@ -11,9 +11,9 @@ Initialising wulong vault at: <vault>
     Meta/context/
     .wulong/
   Copied 4 overlay file(s):
-    .env.example -> .env
-    .wulong/projects.json.example -> .wulong/projects.json
-    Meta/brain.md.example -> Meta/brain.md
+    brain.md.example -> Meta/brain.md
+    env.example -> .env
+    projects.json.example -> .wulong/projects.json
     scrub-patterns.txt.example -> scrub-patterns.txt
 Done. Set WULONG_ROOT to this path in your shell or .env.
 WARNING [B] stray_code: allow-list absent from both vault-structure.md and vault-health-thresholds.json — axis skipped (fail-open)

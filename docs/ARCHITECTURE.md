@@ -24,8 +24,10 @@ committed as a template. `wulong init` copies the examples to their real names.
 ```
 wulong/             installable Python package (thin shell)
   __init__.py       version constant
-  cli.py            entry point — subprocess dispatcher, no business logic
+  cli.py            entry point: subprocess dispatcher, no business logic
   sync/             53 engine scripts (the governance substrate)
+  templates/        4 overlay template files bundled as package data
+                    (importlib.resources; works from both wheel and editable installs)
 pyproject.toml      [project.scripts] wulong = "wulong.cli:main"
 ```
 
