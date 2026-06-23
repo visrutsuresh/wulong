@@ -1,4 +1,15 @@
+# --- Overlay files (personal data; .example versions are tracked) ---
 .env
+scrub-patterns.txt
+Meta/brain.md
+.wulong/projects.json
+# keep .example templates tracked
+!.env.example
+!scrub-patterns.txt.example
+!Meta/brain.md.example
+!.wulong/projects.json.example
+
+# --- Build / tooling ---
 *.pkl
 *.joblib
 *.pt
@@ -15,6 +26,5 @@ build/
 .venv/
 .obsidian/
 Private/
-scrub-patterns.txt
 Meta/sync/*.db
 Meta/doctor/

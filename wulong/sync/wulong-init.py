@@ -1,11 +1,26 @@
 #!/usr/bin/env python3
 """wulong-init.py — scaffold a working wulong setup into a target directory.
 
-Creates the vault skeleton (Meta/, .claude/) and copies .example overlay files
-into place as real files. Skips any target file that already exists.
+Creates the vault skeleton (Meta/, .claude/, .wulong/) and copies .example overlay
+files into place as real files. Skips any target file that already exists.
 
-Phase D: copies whatever .example files exist in the engine root.
-Phase E: completes the full overlay file set (brain.md, user-profile.md, .env, etc).
+OVERLAY FILES (gitignored; bootstrapped from .example by this script):
+  .env                       — env knobs (WULONG_ROOT, GITHUB_TOKEN, etc.)
+  scrub-patterns.txt         — personal tokens for the scrub deny-list
+  Meta/brain.md              — living world-state (personal project content)
+  .wulong/projects.json      — per-project metrics config for compile-context.py
+
+ENGINE FILES (tracked in git; generic, no personal data):
+  Everything else — agent defs, sync scripts, Meta skeleton docs, playbooks.
+
+WHEEL-VS-CLONE NOTE:
+  This script locates .example templates via Path(__file__).parent.parent.parent
+  (i.e., wulong/sync/ -> wulong/ -> repo root). This is correct when running
+  from a git clone. A wheel install places the package in site-packages, where
+  the repo root is not present. If you installed via pip without cloning, run
+  init from inside the cloned repo instead. Future Phase F will package templates
+  as importlib.resources data for full pip-install support.
+  # ponytail: clone-only for now; upgrade path = importlib.resources in Phase F
 """
 import argparse
 import os
@@ -13,8 +28,13 @@ import shutil
 import sys
 from pathlib import Path
 
-# Engine root = the installed package's grandparent (wulong/sync/ -> wulong/ -> root)
+# Engine root = the repo root (wulong/sync/ -> wulong/ -> root)
 _ENGINE_ROOT = Path(__file__).resolve().parent.parent.parent
+
+
+def _check_engine_root() -> bool:
+    """Return True if engine root looks like a valid wulong clone (has .example files)."""
+    return any(_ENGINE_ROOT.rglob("*.example"))
 
 
 def _scaffold_dirs(target: Path) -> list[str]:
@@ -76,6 +96,17 @@ def main() -> None:
     if not target.exists():
         target.mkdir(parents=True)
 
+    if not _check_engine_root():
+        print(
+            f"ERROR: no .example template files found under {_ENGINE_ROOT}.\n"
+            "wulong init must be run from inside a cloned wulong repo, not a\n"
+            "wheel install. Clone the repo first:\n"
+            "  git clone https://github.com/your-org/wulong\n"
+            "  cd wulong && pip install -e . && wulong init",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
     print(f"Initialising wulong vault at: {target}")
 
     created_dirs = _scaffold_dirs(target)
@@ -96,7 +127,7 @@ def main() -> None:
         for f in skipped:
             print(f"    {f}")
     if not copied and not skipped:
-        print("  Overlay files: none found (Phase E adds the full set).")
+        print("  Overlay files: none found.")
 
     print("Done. Set WULONG_ROOT to this path in your shell or .env.")
 
