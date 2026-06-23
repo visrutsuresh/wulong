@@ -37,8 +37,12 @@ from datetime import datetime, timezone
 import os
 from pathlib import Path
 
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+try:
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.metrics.pairwise import cosine_similarity
+    _SKLEARN = True
+except ImportError:
+    _SKLEARN = False  # ponytail: optional dep; upgrade = pip install wulong[ml]
 
 _WULONG_ROOT = os.environ.get("WULONG_ROOT", str(Path(__file__).resolve().parent.parent.parent))  # ponytail: env knob; upgrade = set WULONG_ROOT in wulong init
 VAULT = Path(_WULONG_ROOT)
@@ -140,19 +144,29 @@ def canonicalize(text: str) -> str:
 # ── Clustering ──────────────────────────────────────────────────────────────────
 
 
+def _similarity_matrix(docs: list[str]) -> list[list[float]]:
+    """Pairwise similarity. Uses TF-IDF if sklearn present, else difflib ratio."""
+    n = len(docs)
+    if _SKLEARN:
+        vec = TfidfVectorizer(min_df=1, ngram_range=(1, 2))
+        try:
+            X = vec.fit_transform(docs)
+            sim_np = cosine_similarity(X)
+            return [[float(sim_np[i, j]) for j in range(n)] for i in range(n)]
+        except ValueError:
+            pass
+    import difflib  # stdlib fallback — ponytail: ceiling = TF-IDF; upgrade = pip install wulong[ml]
+    return [[difflib.SequenceMatcher(None, docs[i], docs[j]).ratio() for j in range(n)] for i in range(n)]
+
+
 def cluster_lessons(lessons: list[dict], threshold: float = COSINE_THRESHOLD) -> list[list[int]]:
-    """Greedy single-link clustering via TF-IDF + cosine.
+    """Greedy single-link clustering via TF-IDF + cosine (or difflib fallback).
     Returns list of clusters; each cluster is a list of lesson indices.
     """
     if len(lessons) < 2:
         return [[i] for i in range(len(lessons))]
     docs = [canonicalize(L["body"]) for L in lessons]
-    vec = TfidfVectorizer(min_df=1, ngram_range=(1, 2))
-    try:
-        X = vec.fit_transform(docs)
-    except ValueError:
-        return [[i] for i in range(len(lessons))]
-    sim = cosine_similarity(X)
+    sim = _similarity_matrix(docs)
     n = len(lessons)
     parent = list(range(n))
 
@@ -169,7 +183,7 @@ def cluster_lessons(lessons: list[dict], threshold: float = COSINE_THRESHOLD) ->
 
     for i in range(n):
         for j in range(i + 1, n):
-            if sim[i, j] >= threshold:
+            if sim[i][j] >= threshold:
                 union(i, j)
 
     groups: dict[int, list[int]] = defaultdict(list)
@@ -214,12 +228,9 @@ def detect_conflict(candidate_body: str, active_rules: list[dict]) -> dict | Non
         return None
     candidate_canon = canonicalize(candidate_body)
     rule_canons = [canonicalize(r["body"]) for r in active_rules]
-    vec = TfidfVectorizer(min_df=1, ngram_range=(1, 2))
-    try:
-        X = vec.fit_transform([candidate_canon] + rule_canons)
-    except ValueError:
-        return None
-    sim = cosine_similarity(X[0:1], X[1:]).flatten()
+    all_docs = [candidate_canon] + rule_canons
+    sim_matrix = _similarity_matrix(all_docs)
+    sim = sim_matrix[0][1:]  # candidate vs each rule
     for i, score in enumerate(sim):
         if score >= CONFLICT_COSINE_THRESHOLD and has_polarity_flip(
             candidate_body, active_rules[i]["body"]

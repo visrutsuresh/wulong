@@ -13,6 +13,7 @@ wulong = "wulong.cli:main"
 
 [project.optional-dependencies]
 dev = ["pytest"]
+ml = ["scikit-learn>=1.0"]
 
 [tool.setuptools.packages.find]
 where = ["."]
