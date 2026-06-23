@@ -9,6 +9,10 @@ secrets
 *.key
 *.pem
 __pycache__/
+*.egg-info/
+dist/
+build/
+.venv/
 .obsidian/
 Private/
 scrub-patterns.txt
