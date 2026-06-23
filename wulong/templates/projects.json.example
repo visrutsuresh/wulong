@@ -1,0 +1,27 @@
+{
+  "_comment": "Copy this to projects.json and fill in your project details. projects.json is gitignored.",
+  "_usage": "Read by compile-context.py and health-scan.py for per-project metrics and dashboard links.",
+  "projects": [
+    {
+      "name": "project-alpha",
+      "repo": "username/project-alpha",
+      "description": "Example project — replace with your own."
+    }
+  ],
+  "wr_baselines": {
+    "project-alpha": 0.50
+  },
+  "go_live_dates": {
+    "project-alpha": "YYYY-MM-DD"
+  },
+  "critical_path": {
+    "project-alpha": "Describe the most important next step here."
+  },
+  "next_experiment": {
+    "project-alpha": "Describe the current experiment or hypothesis here."
+  },
+  "risk_flags": {
+    "project-alpha": "Describe any active risk or blocker here."
+  },
+  "github_projects": {}
+}

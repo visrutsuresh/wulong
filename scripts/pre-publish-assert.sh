@@ -66,6 +66,9 @@ else
     local f="$1"
     for exc in "${EXCLUDED[@]}"; do [[ "$f" == "$exc" ]] && return 0; done
     for prefix in "${EXCLUDED_PREFIXES[@]}"; do [[ "$f" == "$prefix"* ]] && return 0; done
+    # .example files are template stubs that model what private tokens look like.
+    # They contain placeholder strings, not real personal data, so scrub skips them.
+    [[ "$f" == *.example ]] && return 0
     return 1
   }
 

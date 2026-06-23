@@ -13,28 +13,89 @@ OVERLAY FILES (gitignored; bootstrapped from .example by this script):
 ENGINE FILES (tracked in git; generic, no personal data):
   Everything else — agent defs, sync scripts, Meta skeleton docs, playbooks.
 
-WHEEL-VS-CLONE NOTE:
-  This script locates .example templates via Path(__file__).parent.parent.parent
-  (i.e., wulong/sync/ -> wulong/ -> repo root). This is correct when running
-  from a git clone. A wheel install places the package in site-packages, where
-  the repo root is not present. If you installed via pip without cloning, run
-  init from inside the cloned repo instead. Future Phase F will package templates
-  as importlib.resources data for full pip-install support.
-  # ponytail: clone-only for now; upgrade path = importlib.resources in Phase F
+TEMPLATE RESOLUTION (two paths, both correct):
+  Wheel install: templates are packaged inside wulong.templates (importlib.resources).
+  Editable/clone: templates are found by walking up from this file to the repo root
+    and globbing *.example. The repo-root walk is the fallback when the package
+    data path is empty or unavailable.
+  # ponytail: two-path design; ceiling = importlib.resources for wheel,
+  #   repo-root glob for editable. Upgrade path = none needed (this is the final form).
 """
 import argparse
-import os
+import importlib.resources
 import shutil
 import sys
 from pathlib import Path
 
-# Engine root = the repo root (wulong/sync/ -> wulong/ -> root)
+# Destination mapping for the flat template files (template name -> relative dest path).
+# Keys are filenames inside wulong/templates/; values are dest paths relative to target.
+_TEMPLATE_DEST: dict[str, str] = {
+    "env.example": ".env",
+    "scrub-patterns.txt.example": "scrub-patterns.txt",
+    "brain.md.example": "Meta/brain.md",
+    "projects.json.example": ".wulong/projects.json",
+}
+
+# Engine root for the editable/clone fallback: wulong/sync/ -> wulong/ -> repo root
 _ENGINE_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
-def _check_engine_root() -> bool:
-    """Return True if engine root looks like a valid wulong clone (has .example files)."""
-    return any(_ENGINE_ROOT.rglob("*.example"))
+def _templates_from_package() -> dict[str, bytes]:
+    """Load templates from the installed package (wheel path).
+
+    Returns a dict of {template_filename: file_bytes}. Empty if unavailable.
+    """
+    result: dict[str, bytes] = {}
+    try:
+        pkg = importlib.resources.files("wulong.templates")
+        for name in _TEMPLATE_DEST:
+            resource = pkg / name
+            try:
+                result[name] = resource.read_bytes()
+            except (FileNotFoundError, TypeError):
+                pass
+    except (ModuleNotFoundError, AttributeError):
+        pass
+    return result
+
+
+def _templates_from_repo() -> dict[str, bytes]:
+    """Load templates from the repo root (editable/clone path).
+
+    The flat template name is derived from the source .example file:
+      .env.example         -> env.example
+      scrub-patterns.txt.example -> scrub-patterns.txt.example
+      Meta/brain.md.example -> brain.md.example
+      .wulong/projects.json.example -> projects.json.example
+
+    Returns a dict of {template_name: file_bytes} for templates found.
+    """
+    # Original repo paths for each flat template name
+    _REPO_SOURCES: dict[str, Path] = {
+        "env.example": _ENGINE_ROOT / ".env.example",
+        "scrub-patterns.txt.example": _ENGINE_ROOT / "scrub-patterns.txt.example",
+        "brain.md.example": _ENGINE_ROOT / "Meta" / "brain.md.example",
+        "projects.json.example": _ENGINE_ROOT / ".wulong" / "projects.json.example",
+    }
+    result: dict[str, bytes] = {}
+    for name, src in _REPO_SOURCES.items():
+        if src.exists():
+            result[name] = src.read_bytes()
+    return result
+
+
+def _resolve_templates() -> dict[str, bytes]:
+    """Return templates from wheel package if available, else from repo root.
+
+    Logs which path was used for transparency.
+    """
+    pkg_templates = _templates_from_package()
+    if len(pkg_templates) == len(_TEMPLATE_DEST):
+        return pkg_templates
+
+    # Fallback: editable/clone install
+    repo_templates = _templates_from_repo()
+    return {**pkg_templates, **repo_templates}
 
 
 def _scaffold_dirs(target: Path) -> list[str]:
@@ -60,22 +121,22 @@ def _scaffold_dirs(target: Path) -> list[str]:
     return created
 
 
-def _copy_examples(target: Path) -> tuple[list[str], list[str]]:
-    """Copy .example files from engine root to target, stripping .example suffix.
+def _copy_templates(target: Path, templates: dict[str, bytes]) -> tuple[list[str], list[str]]:
+    """Write template data to target, using the dest map. Skip if dest exists.
 
-    Returns (copied, skipped).
+    Returns (copied_descriptions, skipped_descriptions).
     """
     copied: list[str] = []
     skipped: list[str] = []
-    for example in sorted(_ENGINE_ROOT.rglob("*.example")):
-        rel = example.relative_to(_ENGINE_ROOT)
-        dest = target / str(rel).removesuffix(".example")
+    for name, content in sorted(templates.items()):
+        dest_rel = _TEMPLATE_DEST.get(name, name.removesuffix(".example"))
+        dest = target / dest_rel
         if dest.exists():
-            skipped.append(str(rel))
+            skipped.append(f"{name} -> {dest_rel}")
         else:
             dest.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(example, dest)
-            copied.append(str(rel) + " -> " + str(dest.relative_to(target)))
+            dest.write_bytes(content)
+            copied.append(f"{name} -> {dest_rel}")
     return copied, skipped
 
 
@@ -96,13 +157,12 @@ def main() -> None:
     if not target.exists():
         target.mkdir(parents=True)
 
-    if not _check_engine_root():
+    templates = _resolve_templates()
+    if not templates:
         print(
-            f"ERROR: no .example template files found under {_ENGINE_ROOT}.\n"
-            "wulong init must be run from inside a cloned wulong repo, not a\n"
-            "wheel install. Clone the repo first:\n"
-            "  git clone https://github.com/your-org/wulong\n"
-            "  cd wulong && pip install -e . && wulong init",
+            "ERROR: no overlay templates found.\n"
+            "This should not happen with a correctly installed package.\n"
+            "Try: pip install --force-reinstall wulong  or  pip install -e /path/to/wulong/clone",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -117,7 +177,7 @@ def main() -> None:
     else:
         print("  Directories: all present, nothing created.")
 
-    copied, skipped = _copy_examples(target)
+    copied, skipped = _copy_templates(target, templates)
     if copied:
         print(f"  Copied {len(copied)} overlay file(s):")
         for f in copied:

@@ -30,6 +30,9 @@ is_excluded() {
   for exc in "${EXCLUDED_FILES[@]}"; do
     [[ "$f" == "$exc" ]] && return 0
   done
+  # .example files are template stubs that model what private tokens look like.
+  # They contain placeholder strings, not real personal data, so scrub skips them.
+  [[ "$f" == *.example ]] && return 0
   return 1
 }
 
@@ -56,13 +59,13 @@ while IFS= read -r pattern; do
       filtered=$(echo "$matches" | grep -vE '^[0-9]+:Copyright \(c\) [0-9]{4} .+$' || true)
       if [[ -n "$filtered" ]]; then
         echo "SCRUB HIT: $filepath"
-        echo "$filtered" | sed "s/^/  pattern='$pattern' match: /"
+        while IFS= read -r line; do printf "  pattern=%s match: %s\n" "$pattern" "$line"; done <<< "$filtered"
         FOUND=1
       fi
     else
       if grep -nEi "$pattern" "$filepath" 2>/dev/null | grep -q .; then
         echo "SCRUB HIT: $filepath"
-        grep -nEi "$pattern" "$filepath" | sed "s/^/  pattern='$pattern' match: /"
+        grep -nEi "$pattern" "$filepath" | while IFS= read -r line; do printf "  pattern=%s match: %s\n" "$pattern" "$line"; done
         FOUND=1
       fi
     fi

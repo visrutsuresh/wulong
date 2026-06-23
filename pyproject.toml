@@ -21,3 +21,4 @@ include = ["wulong*"]
 
 [tool.setuptools.package-data]
 "wulong.sync" = ["*.py", "*.json", "*.yaml", "*.sh", ".gitkeep"]
+"wulong.templates" = ["*.example"]
