@@ -21,7 +21,7 @@ Algorithm guardrails:
 - MIN_DAY_SPAN = 2 (prevents 3 lessons in one stressed day from auto-promoting)
 - COSINE_THRESHOLD = 0.72 (same-meaning grouping)
 - CONFLICT_THRESHOLD = 0.55 + polarity-flip check
-- Auto-promoted rules tagged `auto-promoted, unreviewed` until Visrut thumbs them up
+- Auto-promoted rules tagged `auto-promoted, unreviewed` until the vault owner reviews them
 
 Exit codes:
   0 = success (clusters processed, promotions/conflicts written)
@@ -292,7 +292,7 @@ def write_conflict(candidate: dict, conflict: dict, dry_run: bool = False) -> st
         f"**Conflicts with existing rule** `{conflict['rule']['id']}` "
         f"(cosine={conflict['similarity']:.2f}, polarity flip detected):\n\n"
         f"{conflict['rule']['body'][:400]}{'...' if len(conflict['rule']['body']) > 400 else ''}\n\n"
-        f"**Action requested:** Visrut review — accept candidate (deprecate {conflict['rule']['id']}), "
+        f"**Action requested:** Vault owner review — accept candidate (deprecate {conflict['rule']['id']}), "
         f"reject candidate (keep {conflict['rule']['id']}), or merge.\n\n---\n"
     )
     if not dry_run:

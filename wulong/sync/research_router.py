@@ -63,10 +63,13 @@ _CEO_TARGET_PATTERNS: list[re.Pattern[str]] = [
     # Trading repos (under GitHub/) — any path inside them.
     # ponytail: base pattern; extend by setting WULONG_TRADING_REPOS env var as
     # pipe-separated names, e.g. "my_trader|my_bot". Upgrade path = .wulong/projects.json
+    # ponytail: base protected pattern; add your trading repo names via WULONG_TRADING_REPOS
+    # env var (pipe-separated, e.g. "my_trader|my_bot"). wulong.strat always protected.
+    # Upgrade path: populate .wulong/projects.json trading_repos key.
     re.compile(
         r"(?i)(?:GitHub|Documents/GitHub)[/\\](?:"
         + "|".join(
-            ["my_trader", "wulong.strat"]
+            ["wulong.strat"]
             + [re.escape(r) for r in os.environ.get("WULONG_TRADING_REPOS", "").split("|") if r]
         )
         + r")[/\\]"

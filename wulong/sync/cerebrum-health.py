@@ -88,8 +88,9 @@ def check_dead_watcher() -> None:
         result = subprocess.run(
             ["launchctl", "list"], capture_output=True, text=True, timeout=5
         )
-        loaded = "com.visrut.watch-meta" in result.stdout
-        print(f"  launchd com.visrut.watch-meta:   {red('STILL LOADED') if loaded else green('unloaded ✓')}")
+        _label = os.environ.get("WULONG_LAUNCHD_LABEL", "com.wulong.watch-meta")  # ponytail: env knob; set in overlay
+        loaded = _label in result.stdout
+        print(f"  launchd {_label}:   {red('STILL LOADED') if loaded else green('unloaded ✓')}")
     except Exception as e:
         print(f"  launchctl check failed:          {yellow(str(e))}")
 

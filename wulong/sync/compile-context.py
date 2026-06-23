@@ -479,7 +479,7 @@ def build_situation_assessment(pname, state_content, today_str):
         elif diff > 3:
             wr_trend = (
                 f"Last-200 WR {last200_wr:.1f}% vs all-time {alltime_wr:.1f}% "
-                f"({diff:+.1f}pp) — POSSIBLE POSITIVE MOMENTUM: confirm sample is large enough"
+                f"({diff:+.1f}pp) — POSSIBLE UPTREND: confirm sample is large enough before acting"
             )
         else:
             wr_trend = (
@@ -734,12 +734,13 @@ def build_cron_health():
     """
     now_ts = datetime.now().timestamp()
     # (label, path_relative_to_META, expected_max_age_minutes)
-    jobs = [
-        ("compile-context", os.path.join(CONTEXT_DIR, "jarvis.md"), 20),
-        ("vps-sync (my_trader)", os.path.join(LIVE_STATE_DIR, "my_trader.md"), 30),
-        ("vps-sync (weather)", os.path.join(LIVE_STATE_DIR, "my_trader.md"), 30),
-        ("doctor health-check", os.path.join(META, "doctor", "health-history.md"), 60 * 24),
-    ]
+    # ponytail: static job list replaced with dynamic live-state discovery
+    jobs = [("compile-context", os.path.join(CONTEXT_DIR, "jarvis.md"), 20)]
+    if os.path.isdir(LIVE_STATE_DIR):
+        for fn in sorted(os.listdir(LIVE_STATE_DIR)):
+            if fn.endswith(".md"):
+                jobs.append((f"vps-sync ({fn[:-3]})", os.path.join(LIVE_STATE_DIR, fn), 30))
+    jobs.append(("doctor health-check", os.path.join(META, "doctor", "health-history.md"), 60 * 24))
     rows = []
     overdue = []
     for label, path, max_age_min in jobs:

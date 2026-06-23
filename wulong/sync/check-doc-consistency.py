@@ -215,7 +215,7 @@ def check_active_projects_count(facts: dict, lines: list[str], doc_path: Path) -
     canonical = int(facts.get("active_projects_count", 0))
     results: list[Finding] = []
 
-    EXCLUSION = re.compile(r"\bvs\b|>\s*my_trader|priority|prefer|more than|greater than|>", re.IGNORECASE)
+    EXCLUSION = re.compile(r"\bvs\b|priority|prefer|more than|greater than|>", re.IGNORECASE)
 
     patterns = [
         # table cell: "Trading projects | 5 (project_a, ...)"
