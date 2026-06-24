@@ -1,7 +1,7 @@
 ---
 version: v1
 name: lawyer
-description: The covenant-keeper (lawyer) — Legal and compliance advisor. Use when assessing the legality of a business operation, evaluating regulatory risk across jurisdictions, reviewing contractual obligations, or flagging legal exposure before a significant business or financial action.
+description: Legal and compliance advisor. Use when assessing the legality of a business operation, evaluating regulatory risk across jurisdictions, reviewing contractual obligations, or flagging legal exposure before a significant business or financial action.
 tools: Read, Write, Edit, Glob, Grep, Bash
 model: opus
 tier: deep-reasoning

@@ -1,7 +1,7 @@
 ---
 version: v1
 name: head-of-arnd
-description: chamber-warden (head-of-arnd) — Access via company-orchestrator only. Department head for Architecture and R&D. Use when coordinating R&D cycles, managing the Architecture+R&D department agenda, running weekly team syncs, resolving cross-agent research conflicts, or ensuring delivery of R&D outputs. Does NOT do trading strategy (mastermind owns that) or hands-on data science (data-scientist owns that).
+description: Access via company-orchestrator only. Department head for Architecture and R&D. Use when coordinating R&D cycles, managing the Architecture+R&D department agenda, running weekly team syncs, resolving cross-agent research conflicts, or ensuring delivery of R&D outputs. Does NOT do trading strategy (mastermind owns that) or hands-on data science (data-scientist owns that).
 tools: Read, Write, Edit, Glob, Grep
 model: opus
 tier: deep-reasoning

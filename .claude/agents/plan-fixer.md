@@ -1,7 +1,7 @@
 ---
 version: v1
 name: plan-fixer
-description: The fragment-rewriter (plan-fixer) — Access via jarvis only. NN #10 plan-review fixer — takes ONE contrarian OBJECTION about a draft plan plus the relevant plan fragment and relevant files, and returns a revised plan fragment that addresses that specific objection. Fan-out worker — Jarvis dispatches N plan-fixers in parallel (one per objection) and merges their fragments into plan v2.
+description: Access via jarvis only. NN #10 plan-review fixer — takes ONE contrarian OBJECTION about a draft plan plus the relevant plan fragment and relevant files, and returns a revised plan fragment that addresses that specific objection. Fan-out worker — Jarvis dispatches N plan-fixers in parallel (one per objection) and merges their fragments into plan v2.
 tools: Read, Write, Edit, Glob, Grep
 model: sonnet
 tier: workers

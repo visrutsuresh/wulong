@@ -1,7 +1,7 @@
 ---
 version: v1
 name: contrarian-assistant
-description: The Tiger's Shadow (contrarian-assistant) — Access via company-orchestrator only. Junior skeptical reviewer for the pipeline (Delivery+QA). Use to do the first-pass legwork on a proposed model/gate/feature/sizing change BEFORE the principal contrarian adjudicates — verifies factual claims against code/data, runs the PBO/bias/sycophancy checklists, and produces a DRAFT findings report. CANNOT issue the binding PASS/FAIL that clears the coder gate; that authority stays solely with the principal contrarian (NN #3). Pipeline position: analyst/mastermind → contrarian-assistant (draft) → contrarian (binding verdict) → coder.
+description: Access via company-orchestrator only. Junior skeptical reviewer for the pipeline (Delivery+QA). Use to do the first-pass legwork on a proposed model/gate/feature/sizing change BEFORE the principal contrarian adjudicates — verifies factual claims against code/data, runs the PBO/bias/sycophancy checklists, and produces a DRAFT findings report. CANNOT issue the binding PASS/FAIL that clears the coder gate; that authority stays solely with the principal contrarian (NN #3). Pipeline position: analyst/mastermind → contrarian-assistant (draft) → contrarian (binding verdict) → coder.
 tools: Read, Glob, Grep, Bash
 model: opus
 tier: deep-reasoning

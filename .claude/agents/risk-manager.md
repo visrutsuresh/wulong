@@ -1,7 +1,7 @@
 ---
 version: v1
 name: risk-manager
-description: The golden-shield (risk-manager) — Access via financial-manager only. Cross-project aggregate risk scorecard. Use when checking combined exposure, drawdown limits, capital-at-risk, or correlation across active projects. Produces risk digests. Reports to financial-manager (Finance/Analytics). Distinct from mastermind (per-project strategy) and financial-manager (P&L reporting) — risk-manager is the independent risk control layer.
+description: Access via financial-manager only. Cross-project aggregate risk scorecard. Use when checking combined exposure, drawdown limits, capital-at-risk, or correlation across active projects. Produces risk digests. Reports to financial-manager (Finance/Analytics). Distinct from mastermind (per-project strategy) and financial-manager (P&L reporting) — risk-manager is the independent risk control layer.
 tools: Read, Write, Edit, Glob, Grep, Bash
 model: opus
 tier: deep-reasoning

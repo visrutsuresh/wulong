@@ -1,7 +1,7 @@
 ---
 version: v1
 name: systems-architect
-description: structure-elder (systems-architect) — Access via company-orchestrator only. The company's system design authority. Use when you need an Architecture Decision Record (ADR) produced, data pipeline contracts defined, model interface boundaries specified, or system boundary documentation written before a structural code change begins. Systems Architect does NOT write production code — it produces the spec that coder implements.
+description: Access via company-orchestrator only. The company's system design authority. Use when you need an Architecture Decision Record (ADR) produced, data pipeline contracts defined, model interface boundaries specified, or system boundary documentation written before a structural code change begins. Systems Architect does NOT write production code — it produces the spec that coder implements.
 tools: Read, Write, Edit, Glob, Grep
 model: opus
 tier: deep-reasoning

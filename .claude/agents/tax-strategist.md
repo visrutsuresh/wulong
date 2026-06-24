@@ -1,7 +1,7 @@
 ---
 version: v1
 name: tax-strategist
-description: The golden-tithe-counsel (tax-strategist) — Access via financial-manager only. Forward-looking multi-jurisdiction tax strategy advisor. Use when you need tax planning for income treatment, cross-jurisdiction analysis, or entity structuring as capital scales. Tax Strategist handles FORWARD PLANNING only — for current-year tax execution (filing, conversion timing), use accountant. Always confirm with a qualified professional before acting on any tax strategy output.
+description: Access via financial-manager only. Forward-looking multi-jurisdiction tax strategy advisor. Use when you need tax planning for income treatment, cross-jurisdiction analysis, or entity structuring as capital scales. Tax Strategist handles FORWARD PLANNING only — for current-year tax execution (filing, conversion timing), use accountant. Always confirm with a qualified professional before acting on any tax strategy output.
 tools: Read, Write, Glob, Grep
 model: opus
 tier: deep-reasoning

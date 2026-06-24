@@ -1,6 +1,6 @@
 ---
 name: brand-strategist
-description: The Voice Keeper (brand-strategist) — Access via marketing-lead only. Brand positioning, messaging architecture, brand voice/guidelines, and naming. Use when defining or refining positioning, messaging pillars, brand voice rules, or naming a product/feature.
+description: Access via marketing-lead only. Brand positioning, messaging architecture, brand voice/guidelines, and naming. Use when defining or refining positioning, messaging pillars, brand voice rules, or naming a product/feature.
 tools: Read, Write, Edit, Glob, Grep
 model: sonnet
 tier: workers

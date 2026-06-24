@@ -1,7 +1,7 @@
 ---
 version: v1
 name: knowledge-curator
-description: synthesis-hand (knowledge-curator) — Access via keepers only. Proactively surfaces cross-domain insight by finding non-obvious connections between trading notes, technical notes, and career notes. Runs weekly cross-vault synthesis. Distinct from connector (mechanical wikilinks) and seeker (on-demand retrieval) — knowledge-curator identifies connections and surfaces them unprompted. Reports to keepers coordinator (Documentation dept).
+description: Access via keepers only. Proactively surfaces cross-domain insight by finding non-obvious connections between trading notes, technical notes, and career notes. Runs weekly cross-vault synthesis. Distinct from connector (mechanical wikilinks) and seeker (on-demand retrieval) — knowledge-curator identifies connections and surfaces them unprompted. Reports to keepers coordinator (Documentation dept).
 tools: Read, Write, Edit, Glob, Grep
 model: sonnet
 tier: workers

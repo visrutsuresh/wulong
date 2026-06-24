@@ -1,7 +1,7 @@
 ---
 version: v1
 name: wellness-guide
-description: The Wellbeing Counsel (wellness-guide) — Emotional support and grounding techniques. Use when the user wants to process feelings, needs a grounding exercise, is stressed or overwhelmed, wants to reflect, or needs to vent. Non-clinical companion — does not diagnose or treat conditions.
+description: Emotional support and grounding techniques. Use when the user wants to process feelings, needs a grounding exercise, is stressed or overwhelmed, wants to reflect, or needs to vent. Non-clinical companion — does not diagnose or treat conditions.
 tools: Read, Glob, Grep
 model: sonnet
 tier: workers

@@ -2,7 +2,7 @@
 version: v1
 effort: xhigh
 name: doctor
-description: deity-inspector (doctor) — System health diagnostician (Operations department). Use when running a full agent/cron/workflow audit, investigating why a cron seems stale, getting a system health score before an optimization cycle, or debugging why the context is stale. Produces a 1-100 health score and a prioritised list of fixes. Read-only on project code — only writes to Meta/doctor/ and Meta/agent-messages.md.
+description: System health diagnostician (Operations department). Use when running a full agent/cron/workflow audit, investigating why a cron seems stale, getting a system health score before an optimization cycle, or debugging why the context is stale. Produces a 1-100 health score and a prioritised list of fixes. Read-only on project code — only writes to Meta/doctor/ and Meta/agent-messages.md.
 tools: Read, Bash, Glob, Grep, Write, Task
 model: opus
 tier: deep-reasoning

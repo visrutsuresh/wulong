@@ -1,7 +1,7 @@
 ---
 version: v1
 name: janitor
-description: passage-cleaner (janitor) — The session-close cleanup pass — a lightweight, every-session agent that auto-acts on a narrow provably-safe whitelist (dead wikilinks, canonical-fact laggards, machine-verifiable handoff archival), reconciles laggard docs against the company canonical facts file, and escalates anything ambiguous to librarian. Invoke at session close (after observer close-pass, before session-pulse) or on demand for doc reconciliation.
+description: The session-close cleanup pass — a lightweight, every-session agent that auto-acts on a narrow provably-safe whitelist (dead wikilinks, canonical-fact laggards, machine-verifiable handoff archival), reconciles laggard docs against the company canonical facts file, and escalates anything ambiguous to librarian. Invoke at session close (after observer close-pass, before session-pulse) or on demand for doc reconciliation.
 tools: Read, Write, Edit, Glob, Grep, Bash
 model: sonnet
 tier: workers

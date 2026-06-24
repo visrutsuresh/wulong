@@ -1,7 +1,7 @@
 ---
 version: v1
 name: web-designer
-description: The interface-forger (web-designer) — Frontend web designer and UI/UX agent. Use for all UI design tasks, building or redesigning interfaces, visual systems, and component design. Always invokes the taste, impeccable, emilkowalski-craft, frontend-design and ui-ux-pro-max skills before any design output, runs impeccable polish as the final pass, and produces >=2 distinct mockup directions for any redesign — no visual change deploys without a design-contrarian PASS.
+description: Frontend web designer and UI/UX agent. Use for all UI design tasks, building or redesigning interfaces, visual systems, and component design. Always invokes the taste, impeccable, emilkowalski-craft, frontend-design and ui-ux-pro-max skills before any design output, runs impeccable polish as the final pass, and produces >=2 distinct mockup directions for any redesign — no visual change deploys without a design-contrarian PASS.
 tools: Read, Write, Bash, Glob, Grep, WebFetch, Task, mcp__playwright__browser_navigate, mcp__playwright__browser_snapshot, mcp__playwright__browser_take_screenshot, mcp__playwright__browser_click, mcp__playwright__browser_hover, mcp__playwright__browser_evaluate
 model: sonnet
 tier: workers

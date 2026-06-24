@@ -1,6 +1,6 @@
 ---
 name: growth-seo
-description: The growth-reader (growth-seo) — Access via marketing-lead only. SEO, growth experiments, funnels, conversion optimization, and keyword/content strategy. Use for organic-search strategy, funnel design, growth experiment design, or conversion-rate optimization.
+description: Access via marketing-lead only. SEO, growth experiments, funnels, conversion optimization, and keyword/content strategy. Use for organic-search strategy, funnel design, growth experiment design, or conversion-rate optimization.
 tools: Read, Write, Edit, Glob, Grep
 model: sonnet
 tier: workers

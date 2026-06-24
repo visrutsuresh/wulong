@@ -1,7 +1,7 @@
 ---
 version: v1
 name: researcher
-description: literature-hand (researcher) — Access via company-orchestrator only. Signal and strategy researcher. Use when you need new feature or signal ideas sourced from academic papers on prediction markets, binary options pricing, asset price trends, and market microstructure. Evaluates whether a research finding is applicable to the active strategy before it goes to data-scientist or coder. Does not write code — produces signal briefs.
+description: Access via company-orchestrator only. Signal and strategy researcher. Use when you need new feature or signal ideas sourced from academic papers on prediction markets, binary options pricing, asset price trends, and market microstructure. Evaluates whether a research finding is applicable to the active strategy before it goes to data-scientist or coder. Does not write code — produces signal briefs.
 tools: Read, Write, WebSearch, WebFetch, Glob, Grep
 model: sonnet
 tier: workers

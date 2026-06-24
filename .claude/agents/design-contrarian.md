@@ -2,7 +2,7 @@
 version: v1
 effort: xhigh
 name: design-contrarian
-description: design-trial-elder (design-contrarian) — Access via the orchestrator only. Independent design/UI quality gate. Use AFTER web-designer produces mockups and BEFORE any visual change deploys. Renders the mockup with Playwright and verifies it is actually distinctive, genuinely changed, and ALIVE (not a re-skin, not category-reflex AI slop, not frozen-after-load). Issues PASS / SOFT FAIL / HARD FAIL backed by file/line + visual evidence — not reflexive negation.
+description: Access via the orchestrator only. Independent design/UI quality gate. Use AFTER web-designer produces mockups and BEFORE any visual change deploys. Renders the mockup with Playwright and verifies it is actually distinctive, genuinely changed, and ALIVE (not a re-skin, not category-reflex AI slop, not frozen-after-load). Issues PASS / SOFT FAIL / HARD FAIL backed by file/line + visual evidence — not reflexive negation.
 tools: Read, Glob, Grep, Bash, mcp__playwright__browser_navigate, mcp__playwright__browser_snapshot, mcp__playwright__browser_take_screenshot, mcp__playwright__browser_click, mcp__playwright__browser_hover, mcp__playwright__browser_evaluate
 model: opus
 tier: deep-reasoning

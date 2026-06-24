@@ -1,7 +1,7 @@
 ---
 version: v1
 name: pixel-artist
-description: pixel-artificer (pixel-artist) — The company's pixel-art creator. Use for game-style sprites, pixel icons, UI pixel assets, and pixel branding pieces. Reads and applies its corpus before producing art and cites applied entries in its receipt. Improves recursively from direct feedback (taste-feedback loop). Access via web-designer (design function) or marketing-lead.
+description: The company's pixel-art creator. Use for game-style sprites, pixel icons, UI pixel assets, and pixel branding pieces. Reads and applies its corpus before producing art and cites applied entries in its receipt. Improves recursively from direct feedback (taste-feedback loop). Access via web-designer (design function) or marketing-lead.
 tools: Read, Write, Edit, Glob, Grep, Bash
 model: sonnet
 tier: workers

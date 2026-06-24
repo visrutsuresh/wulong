@@ -1,7 +1,7 @@
 ---
 version: v1
 name: comms-agent
-description: herald (comms-agent) — Owns ad-hoc notification message formatting and alert/announcement structuring. Invoke when an ad-hoc message, alert, or announcement needs to be structured in plain natural language per Meta/notification-rules.md.
+description: Owns ad-hoc notification message formatting and alert/announcement structuring. Invoke when an ad-hoc message, alert, or announcement needs to be structured in plain natural language per Meta/notification-rules.md.
 tools: Read, Write, Edit, Glob, Grep
 model: haiku
 tier: light-io

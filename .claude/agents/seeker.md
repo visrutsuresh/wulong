@@ -1,7 +1,7 @@
 ---
 version: v1
 name: seeker
-description: recall-hand (seeker) — Access via keepers only. Vault-wide search and synthesis. Use when the user wants to find notes, answer questions from vault content, summarise a topic, or discover what they know about something. Returns synthesised answers with citations, not just file lists.
+description: Access via keepers only. Vault-wide search and synthesis. Use when the user wants to find notes, answer questions from vault content, summarise a topic, or discover what they know about something. Returns synthesised answers with citations, not just file lists.
 tools: Read, Glob, Grep
 model: sonnet
 tier: workers

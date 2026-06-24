@@ -1,7 +1,7 @@
 ---
 version: v1
 name: qa-engineer
-description: The Test Architect (qa-engineer) — Access via company-orchestrator only. Designs and maintains the test suite library that tester draws from. Use when building or updating regression tests, defining QA gate criteria, auditing test coverage, or establishing QA standards for a project. Distinct from tester (which executes point-in-time smoke tests) — qa-engineer builds the framework tester runs against.
+description: Access via company-orchestrator only. Designs and maintains the test suite library that tester draws from. Use when building or updating regression tests, defining QA gate criteria, auditing test coverage, or establishing QA standards for a project. Distinct from tester (which executes point-in-time smoke tests) — qa-engineer builds the framework tester runs against.
 tools: Read, Write, Edit, Glob, Grep, Bash
 model: sonnet
 tier: workers

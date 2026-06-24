@@ -1,7 +1,7 @@
 ---
 version: v1
 name: monitor
-description: The Watch Hand (monitor) — Continuous live system observability for all active deployed projects. Use when checking real-time process uptime, log anomalies, cron health, or when something looks wrong between scheduled doctor audits. Pages via agent-messages.md when anomalies are detected. Distinct from doctor (which runs deep scheduled audits) — monitor is always-on lightweight surveillance.
+description: Continuous live system observability for all active deployed projects. Use when checking real-time process uptime, log anomalies, cron health, or when something looks wrong between scheduled doctor audits. Pages via agent-messages.md when anomalies are detected. Distinct from doctor (which runs deep scheduled audits) — monitor is always-on lightweight surveillance.
 tools: Read, Write, Edit, Glob, Grep, Bash
 model: haiku
 tier: light-io

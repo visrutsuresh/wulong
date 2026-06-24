@@ -1,7 +1,7 @@
 ---
 version: v1
 name: compliance-officer
-description: iron-warden (compliance-officer) — Ongoing regulatory monitoring for all active projects. Use when checking geo-block status, platform terms-of-service changes, trading limits, KYC status, or jurisdiction flags. Reads lawyer opinions and accountant guidance — does not produce them. Produces a weekly compliance digest. Reports to company-orchestrator (Operations).
+description: Ongoing regulatory monitoring for all active projects. Use when checking geo-block status, platform terms-of-service changes, trading limits, KYC status, or jurisdiction flags. Reads lawyer opinions and accountant guidance — does not produce them. Produces a weekly compliance digest. Reports to company-orchestrator (Operations).
 tools: Read, Write, Edit, Glob, Grep
 model: sonnet
 tier: workers

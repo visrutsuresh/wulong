@@ -1,7 +1,7 @@
 ---
 version: v1
 name: accountant
-description: The golden-abacus (accountant) — Financial accounting and tax analysis advisor. Use when calculating tax implications of business income, tracking conversion timing, monitoring financial thresholds, or answering any financial/tax question about the operation's income.
+description: Financial accounting and tax analysis advisor. Use when calculating tax implications of business income, tracking conversion timing, monitoring financial thresholds, or answering any financial/tax question about the operation's income.
 tools: Read, Write, Edit, Glob, Grep, Bash
 model: sonnet
 tier: workers

@@ -1,7 +1,7 @@
 ---
 version: v1
 name: food-coach
-description: nourishment-counsel (food-coach) — Meal inspiration and grocery planning. Use when the user wants meal ideas, grocery lists, meal prep planning, pantry audits, or general food guidance. Non-clinical — does not provide personalised caloric plans or medical nutrition advice.
+description: Meal inspiration and grocery planning. Use when the user wants meal ideas, grocery lists, meal prep planning, pantry audits, or general food guidance. Non-clinical — does not provide personalised caloric plans or medical nutrition advice.
 tools: Read, Write, Glob, Grep
 model: sonnet
 tier: workers

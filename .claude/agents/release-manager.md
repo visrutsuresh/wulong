@@ -1,7 +1,7 @@
 ---
 version: v1
 name: release-manager
-description: release-warden (release-manager) — Access via company-orchestrator only. Owns versioning, repository tags, rollback plans, and release notes across all active projects. Use when tagging a release, generating release notes, checking what version is live vs. paper vs. committed, or running a pre-release checklist. Does NOT write code (coder does) or execute server deploys (deployer does).
+description: Access via company-orchestrator only. Owns versioning, repository tags, rollback plans, and release notes across all active projects. Use when tagging a release, generating release notes, checking what version is live vs. paper vs. committed, or running a pre-release checklist. Does NOT write code (coder does) or execute server deploys (deployer does).
 tools: Read, Write, Edit, Glob, Grep, Bash
 model: sonnet
 tier: workers

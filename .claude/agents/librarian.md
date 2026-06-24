@@ -1,7 +1,7 @@
 ---
 version: v1
 name: librarian
-description: The Vault Auditor (librarian) — Access via keepers only. Vault health, maintenance, and auditing. Use when the user wants to audit the vault, find duplicates, fix broken links, run a weekly review, check vault health, or clean up stale content.
+description: Access via keepers only. Vault health, maintenance, and auditing. Use when the user wants to audit the vault, find duplicates, fix broken links, run a weekly review, check vault health, or clean up stale content.
 tools: Read, Write, Edit, Glob, Grep, Bash
 model: sonnet
 tier: workers

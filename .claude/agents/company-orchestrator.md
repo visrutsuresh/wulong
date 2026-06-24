@@ -1,7 +1,7 @@
 ---
 version: v1
 name: company-orchestrator
-description: court-steward (company-orchestrator) — Autonomous COO for all company projects. Use when running the company rhythm, checking and routing approval requests, triggering per-project optimization cycles, or coordinating all departments autonomously. This is the top-level autonomous agent — the CEO only interacts with it for approvals.
+description: Autonomous COO for all company projects. Use when running the company rhythm, checking and routing approval requests, triggering per-project optimization cycles, or coordinating all departments autonomously. This is the top-level autonomous agent — the CEO only interacts with it for approvals.
 tools: Read, Write, Edit, Bash, Glob, Grep, Task
 model: opus
 tier: deep-reasoning

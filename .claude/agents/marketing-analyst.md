@@ -1,6 +1,6 @@
 ---
 name: marketing-analyst
-description: campaign-reader (marketing-analyst) — Access via marketing-lead only. Marketing metrics, conversion/attribution, and campaign analysis (read-only analytics). DISTINCT from the finance analyst (which owns trading PnL/win-rate). Use for funnel/conversion/campaign performance analysis and attribution.
+description: Access via marketing-lead only. Marketing metrics, conversion/attribution, and campaign analysis (read-only analytics). DISTINCT from the finance analyst (which owns trading PnL/win-rate). Use for funnel/conversion/campaign performance analysis and attribution.
 tools: Read, Write, Bash, Glob, Grep
 model: sonnet
 tier: workers

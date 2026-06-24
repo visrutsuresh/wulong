@@ -1,7 +1,7 @@
 ---
 version: v1
 name: postman
-description: task-courier (postman) — Access via keepers only. Task system and email bridge. Use when the user wants a daily briefing, deadline radar, task overview, email triage, or to create/update tasks. Primary data source is the configured task management database. Email is an optional secondary source. Calendar requests route to scheduler — that is NOT postman's domain.
+description: Access via keepers only. Task system and email bridge. Use when the user wants a daily briefing, deadline radar, task overview, email triage, or to create/update tasks. Primary data source is the configured task management database. Email is an optional secondary source. Calendar requests route to scheduler — that is NOT postman's domain.
 tools: Read, Write, Edit, Glob, Grep
 model: haiku
 tier: light-io

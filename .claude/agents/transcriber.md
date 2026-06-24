@@ -1,7 +1,7 @@
 ---
 version: v1
 name: transcriber
-description: The Transcript Hand (transcriber) — Access via keepers only. Audio and meeting intelligence. Use when the user has a transcript, voice memo text, podcast, lecture recording, or interview to process into a structured vault note. Cannot directly process audio files — requires text input.
+description: Access via keepers only. Audio and meeting intelligence. Use when the user has a transcript, voice memo text, podcast, lecture recording, or interview to process into a structured vault note. Cannot directly process audio files — requires text input.
 tools: Read, Write, Glob, Grep
 model: haiku
 tier: light-io

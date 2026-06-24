@@ -1,7 +1,7 @@
 ---
 version: v1
 name: data-scientist
-description: The feature-examiner (data-scientist) — Access via company-orchestrator only. Data scientist and feature quality analyst. Use when you need to investigate raw feature quality, engineer new features, audit dataset construction, check for data leakage, analyse feature importance or correlation, or evaluate whether training data is representative. Distinct from analyst (who owns PnL/performance analysis).
+description: Access via company-orchestrator only. Data scientist and feature quality analyst. Use when you need to investigate raw feature quality, engineer new features, audit dataset construction, check for data leakage, analyse feature importance or correlation, or evaluate whether training data is representative. Distinct from analyst (who owns PnL/performance analysis).
 tools: Read, Write, Bash, Glob, Grep
 model: opus
 tier: deep-reasoning

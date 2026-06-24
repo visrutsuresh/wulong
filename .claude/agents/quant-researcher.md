@@ -1,7 +1,7 @@
 ---
 version: v1
 name: quant-researcher
-description: signal-scholar (quant-researcher) — Access via company-orchestrator only. The company's quantitative signal research agent. Use when you need a new signal investigated from first principles, a factor model constructed, alpha decay analysis run on an existing signal, or cross-market correlation studied. Quant Researcher produces signal briefs — it does NOT implement features (that is data-scientist) and does NOT run backtests (that is backtester). Use at the top of the R&D pipeline, before data-scientist and backtester.
+description: Access via company-orchestrator only. The company's quantitative signal research agent. Use when you need a new signal investigated from first principles, a factor model constructed, alpha decay analysis run on an existing signal, or cross-market correlation studied. Quant Researcher produces signal briefs — it does NOT implement features (that is data-scientist) and does NOT run backtests (that is backtester). Use at the top of the R&D pipeline, before data-scientist and backtester.
 tools: Read, Write, Bash, Glob, Grep
 model: opus
 tier: deep-reasoning

@@ -2,7 +2,7 @@
 version: v1
 effort: xhigh
 name: mastermind
-description: qinglong-the-azure-dragon (mastermind) — Access via company-orchestrator only. Team lead and strategy coordinator across active trading and research projects. Use when you want to know what to work on next, need a fix approved or rejected, want to run a full optimisation cycle, coordinate multiple agents, or set the strategic direction for the current project portfolio.
+description: Access via company-orchestrator only. Team lead and strategy coordinator across active trading and research projects. Use when you want to know what to work on next, need a fix approved or rejected, want to run a full optimisation cycle, coordinate multiple agents, or set the strategic direction for the current project portfolio.
 tools: Read, Write, Edit, Bash, Glob, Grep, Task
 model: opus
 tier: deep-reasoning

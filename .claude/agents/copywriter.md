@@ -1,7 +1,7 @@
 ---
 version: v1
 name: copywriter
-description: prose-hand (copywriter) — Access via marketing-lead only. Owns standalone marketing prose — landing, ad, email, and long-form marketing copy. The brand-voice source for marketing. Reads the marketing corpus and cites applied entries in its receipt (writing-mode owner for marketing prose, analogous to scribe for vault prose).
+description: Access via marketing-lead only. Owns standalone marketing prose — landing, ad, email, and long-form marketing copy. The brand-voice source for marketing. Reads the marketing corpus and cites applied entries in its receipt (writing-mode owner for marketing prose, analogous to scribe for vault prose).
 tools: Read, Write, Edit, Glob, Grep
 model: sonnet
 tier: workers

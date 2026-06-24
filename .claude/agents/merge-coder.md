@@ -1,7 +1,7 @@
 ---
 version: v1
 name: merge-coder
-description: convergence-smith (merge-coder) — Access via the orchestrator only. Reducer for parallel coder shards. Use when N coder shards have completed work in isolated git worktrees and the trees need to be merged into a single branch, conflicts resolved, full test suite run on the merged tree, and the result handed to deployer. Only invoked after ALL shards return PASS from contrarian and backtester.
+description: Access via the orchestrator only. Reducer for parallel coder shards. Use when N coder shards have completed work in isolated git worktrees and the trees need to be merged into a single branch, conflicts resolved, full test suite run on the merged tree, and the result handed to deployer. Only invoked after ALL shards return PASS from contrarian and backtester.
 tools: Read, Write, Edit, Bash, Glob, Grep
 model: sonnet
 tier: workers

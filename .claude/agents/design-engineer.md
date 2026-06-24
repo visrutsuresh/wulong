@@ -1,7 +1,7 @@
 ---
 version: v1
 name: design-engineer
-description: effect-artificer (design-engineer) — Access via web-designer (its parent) or orchestrator. Advanced visual-effects specialist. Use for three.js, GLSL/WebGL shaders, react-three-fiber, liquid-glass, and shadergradient-style hero/landing effects. Builds the effect, verifies it renders + moves + is performant, and hands the implementation to web-designer for integration. Pulls current library docs via context7 MCP.
+description: Access via web-designer (its parent) or orchestrator. Advanced visual-effects specialist. Use for three.js, GLSL/WebGL shaders, react-three-fiber, liquid-glass, and shadergradient-style hero/landing effects. Builds the effect, verifies it renders + moves + is performant, and hands the implementation to web-designer for integration. Pulls current library docs via context7 MCP.
 tools: Read, Write, Bash, Glob, Grep, WebFetch, mcp__playwright__browser_navigate, mcp__playwright__browser_snapshot, mcp__playwright__browser_take_screenshot, mcp__playwright__browser_click, mcp__playwright__browser_hover, mcp__playwright__browser_evaluate, mcp__context7__resolve-library-id, mcp__context7__get-library-docs
 model: sonnet
 tier: workers

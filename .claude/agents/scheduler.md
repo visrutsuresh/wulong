@@ -1,7 +1,7 @@
 ---
 version: v1
 name: scheduler
-description: The Timekeeper (scheduler) — Access via keepers only. Dedicated calendar and time-blocking agent. Owns all scheduling decisions, calendar event management, time conflict detection, and time-block recommendations. Invoke when adding/modifying calendar events, checking for scheduling conflicts, or planning time blocks for the week.
+description: Access via keepers only. Dedicated calendar and time-blocking agent. Owns all scheduling decisions, calendar event management, time conflict detection, and time-block recommendations. Invoke when adding/modifying calendar events, checking for scheduling conflicts, or planning time blocks for the week.
 tools: Read, Write, Edit, Glob, Grep
 model: haiku
 tier: light-io

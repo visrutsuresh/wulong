@@ -1,7 +1,7 @@
 ---
 version: v1
 name: project-manager
-description: court-elder (project-manager) — Owns Meta/task-board.md, milestone tracking, go-live countdowns, stale project flags, and dependency blocking. The single agent responsible for keeping project state current across all active projects. Invoke when the task board needs updating, when a milestone status needs checking, or when a go-live countdown needs verifying.
+description: Owns Meta/task-board.md, milestone tracking, go-live countdowns, stale project flags, and dependency blocking. The single agent responsible for keeping project state current across all active projects. Invoke when the task board needs updating, when a milestone status needs checking, or when a go-live countdown needs verifying.
 tools: Read, Write, Edit, Glob, Grep
 model: sonnet
 tier: workers

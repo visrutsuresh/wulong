@@ -1,7 +1,7 @@
 ---
 version: v1
 name: architect
-description: The Vault Architect (architect) — Access via keepers only. Vault governance, folder structure, and onboarding. Use when setting up new areas, creating folder structures, reorganising the vault, running weekly defragmentation, or creating templates. The Architect is the sole agent that creates or restructures folders.
+description: Access via keepers only. Vault governance, folder structure, and onboarding. Use when setting up new areas, creating folder structures, reorganising the vault, running weekly defragmentation, or creating templates. The Architect is the sole agent that creates or restructures folders.
 tools: Read, Write, Edit, Glob, Grep, Bash
 model: sonnet
 tier: workers

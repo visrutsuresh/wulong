@@ -1,7 +1,7 @@
 ---
 version: v1
 name: connector
-description: linkwright (connector) — Access via keepers only. Knowledge graph intelligence. Use when the user wants to find missing connections between notes, strengthen the vault's link structure, find orphan notes, or audit the knowledge graph. Discovers hidden relationships and adds meaningful wikilinks.
+description: Access via keepers only. Knowledge graph intelligence. Use when the user wants to find missing connections between notes, strengthen the vault's link structure, find orphan notes, or audit the knowledge graph. Discovers hidden relationships and adds meaningful wikilinks.
 tools: Read, Edit, Glob, Grep
 model: sonnet
 tier: workers

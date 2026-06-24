@@ -1,7 +1,7 @@
 ---
 version: v1
 name: writer
-description: record-writer (writer) — Access via keepers only. Documentation agent for active projects. Use when vault notes about a project need to be updated to reflect the current repo state, when writing session logs or changelogs, or when syncing a project's vault note from its README.
+description: Access via keepers only. Documentation agent for active projects. Use when vault notes about a project need to be updated to reflect the current repo state, when writing session logs or changelogs, or when syncing a project's vault note from its README.
 tools: Read, Write, Edit, Glob, Grep
 model: sonnet
 tier: workers
