@@ -7,10 +7,10 @@
 
 A working multi-agent governance framework for Claude Code: every change reviewed, every deploy verified, every decision logged.
 
-<!-- PLACEHOLDER: repo path below uses <your-github-username>/wulong. Replace before publishing. -->
+<!-- repo path below uses visrutsuresh/wulong -->
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![CI](https://github.com/<your-github-username>/wulong/actions/workflows/ci.yml/badge.svg)](https://github.com/<your-github-username>/wulong/actions/workflows/ci.yml)
+[![CI](https://github.com/visrutsuresh/wulong/actions/workflows/ci.yml/badge.svg)](https://github.com/visrutsuresh/wulong/actions/workflows/ci.yml)
 
 ## Quickstart
 
@@ -150,7 +150,7 @@ engine code:
 ## Install from source
 
 ```bash
-git clone https://github.com/<your-github-username>/wulong.git
+git clone https://github.com/visrutsuresh/wulong.git
 cd wulong
 pip install -e .
 wulong init
@@ -162,6 +162,5 @@ MIT. See [LICENSE](LICENSE).
 
 ---
 
-<!-- PLACEHOLDER: Star History graph below renders once the repo is public and has stars.
-     Replace <your-github-username> before publishing. -->
-[![Star History Chart](https://api.star-history.com/svg?repos=<your-github-username>/wulong&type=Date)](https://star-history.com/#<your-github-username>/wulong&Date)
+<!-- Star History graph below renders once the repo is public and has stars. -->
+[![Star History Chart](https://api.star-history.com/svg?repos=visrutsuresh/wulong&type=Date)](https://star-history.com/#visrutsuresh/wulong&Date)

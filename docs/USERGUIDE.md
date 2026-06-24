@@ -9,7 +9,7 @@ pip install wulong
 
 **From source:**
 ```bash
-git clone https://github.com/<your-github-username>/wulong.git
+git clone https://github.com/visrutsuresh/wulong.git
 cd wulong
 pip install -e .
 ```
