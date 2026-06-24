@@ -1,4 +1,3 @@
-<!-- PLACEHOLDER: replace assets/logo.png with the real Wulong logo before publishing -->
 <p align="center">
   <img src="assets/logo.png" alt="Wulong" width="280" />
 </p>
@@ -8,6 +7,7 @@
 A working multi-agent governance framework for Claude Code: every change reviewed, every deploy verified, every decision logged.
 
 <!-- repo path below uses visrutsuresh/wulong -->
+[![PyPI](https://img.shields.io/pypi/v/wulong.svg)](https://pypi.org/project/wulong/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![CI](https://github.com/visrutsuresh/wulong/actions/workflows/ci.yml/badge.svg)](https://github.com/visrutsuresh/wulong/actions/workflows/ci.yml)
@@ -16,8 +16,8 @@ A working multi-agent governance framework for Claude Code: every change reviewe
 
 ```bash
 pip install wulong
-wulong init          # scaffold a vault skeleton into the current directory
-wulong doctor        # run a health scan on your vault
+wulong init          # scaffold the vault skeleton into the current directory
+wulong doctor        # run a health scan against your vault
 ```
 
 ## What it is
