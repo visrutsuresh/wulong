@@ -9,6 +9,15 @@ Meta/brain.md
 !Meta/brain.md.example
 !.wulong/projects.json.example
 
+# --- Payload re-materialised by `wulong init .` at the repo root ---
+# The tracked source of the agent payload is wulong/payload/. Running init here
+# (which CI and the test suite both do, because vault-health-check.py raises if
+# CLAUDE.md is absent) writes 69 of those files back to the repo root as
+# untracked duplicates. Staging them by accident would silently restore the
+# double-copy that Change C1 removed.
+/CLAUDE.md
+/.claude/
+
 # --- Build / tooling ---
 *.pkl
 *.joblib

@@ -10,6 +10,7 @@ Usage:
     python3 Meta/sync/cerebrum-health.py
 """
 from __future__ import annotations
+import json
 import os
 import subprocess
 import sys
@@ -46,16 +47,37 @@ def check_hooks() -> None:
     print(" HOOKS — does Claude Code write to Cerebrum when you do anything?")
     print("─" * 70)
 
+    # This block used to print three red crosses at a CORRECTLY installed vault,
+    # on both paths through the opt-in. It demanded UserPromptSubmit AND
+    # PostToolUse in a settings file wulong writes neither of, so a user who
+    # accepted the Stop-hook wiring still got a cross, and one who declined got a
+    # cross for a deliberate choice. A health check that reds on a correct
+    # install is one people learn to scroll past.
+    # Now: report per event, and report the two vault-local scripts as ABSENT
+    # rather than WRONG, because `wulong init` does not install them and never
+    # claimed to.
     settings = VAULT / ".claude" / "settings.json"
-    settings_ok = settings.exists() and (
-        "UserPromptSubmit" in settings.read_text() and "PostToolUse" in settings.read_text()
-    )
-    print(f"  settings.json hooks installed:   {green('✓') if settings_ok else red('✗')}")
+    wired: list[str] = []
+    if settings.exists():
+        try:
+            wired = sorted(json.loads(settings.read_text()).get("hooks", {}))
+        except (OSError, ValueError):
+            wired = []
+    if wired:
+        print(f"  settings.json hooks wired:       {green('✓')} {dim(', '.join(wired))}")
+    elif settings.exists():
+        print(f"  settings.json hooks wired:       {yellow('none')} "
+              f"{dim('(file exists, no hooks object)')}")
+    else:
+        print(f"  settings.json hooks wired:       {yellow('none')} "
+              f"{dim('(optional; wulong init --with-hooks writes the Stop hook)')}")
 
     capture = VAULT / "Meta" / "sync" / "capture-feedback.py"
     trigger = VAULT / "Meta" / "sync" / "post-write-trigger.py"
-    print(f"  capture-feedback.py exists:      {green('✓') if capture.exists() else red('✗')}")
-    print(f"  post-write-trigger.py exists:    {green('✓') if trigger.exists() else red('✗')}")
+    for label, path in (("capture-feedback.py", capture), ("post-write-trigger.py", trigger)):
+        mark = green("✓") if path.exists() else yellow("absent")
+        note = "" if path.exists() else dim("(vault-local; not installed by wulong init)")
+        print(f"  {label + ' present:':<32} {mark} {note}")
 
     # Today's feedback files
     raw_today = VAULT / "Meta" / "feedback" / "raw" / TODAY

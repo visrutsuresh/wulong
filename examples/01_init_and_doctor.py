@@ -3,6 +3,16 @@
 Runs `wulong init` into a temp directory, then `wulong doctor` on that
 skeleton. Asserts both exit 0 and prints a deterministic summary.
 
+The doctor run is the point: a fresh skeleton cannot run four of the nine
+axes, so the expected verdict is PARTIAL and the expected exit code is still 0.
+A skipped check is not a failure, and it is not a pass either. Until 0.4.0 this
+example asserted exit 0 against a run that printed "all checks passed" over
+three axes that never executed, and the golden below froze that false green in
+the repository.
+
+init runs WITHOUT --with-hooks here, which is the default. That is why the
+golden shows the hook unwired and hook_health among the skips.
+
 This example has no network calls and no fixtures beyond what ships in the
 repo. The expected output is committed at tests/expected/ex01.txt.
 """
@@ -41,7 +51,12 @@ def main() -> None:
         r_doc = _run("vault-health-check.py", [], env=env)
         assert r_doc.returncode == 0, f"wulong doctor failed:\n{r_doc.stderr}"
 
-        for line in r_doc.stdout.splitlines():
+        out = r_doc.stdout
+        assert "PARTIAL" in out, f"expected a PARTIAL verdict on a fresh vault:\n{out}"
+        assert "GREEN" not in out, f"a skipped axis must not print the all-clear:\n{out}"
+        assert "FAILED: 0" in out, out
+
+        for line in out.replace(vault, "<vault>").splitlines():
             print(line)
 
         print("example 01: PASS")

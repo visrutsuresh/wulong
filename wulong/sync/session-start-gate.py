@@ -25,12 +25,23 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from wulong._root import resolve_root
+
 # ─── paths ────────────────────────────────────────────────────────────────────
 
 _HERE = Path(__file__).resolve().parent
 _GUARD_PATH = _HERE / "session-guard.py"
 
-VAULT_ROOT = _HERE.parent.parent
+# THE SPLIT THIS COMMENT USED TO DOCUMENT IS CLOSED. session-guard.py honoured
+# WULONG_ROOT while this file resolved install-relative, so with the variable
+# exported a register through the guard landed under the environment vault while
+# this gate read the install-relative one and reported no active sessions. Both
+# files now go through the same resolver, so both land on the same registry.
+# The reason it was deferred (a one-file patch would move the reader count the
+# docs and tests assert against) died with the shared resolver: the count is
+# re-measured from disk and the detector follows the import.
+VAULT_ROOT = Path(resolve_root(fallback=str(_HERE.parent.parent),
+                               tool="session-start-gate"))
 REGISTRY_FILE = str(VAULT_ROOT / "Meta" / "session-registry.json")
 LEDGER_FILE = str(VAULT_ROOT / "Meta" / "doctor" / "observe-pass-ledger.jsonl")
 HERMES_NOTEBOOK = str(VAULT_ROOT / "Meta" / "hermes" / "notebook.md")

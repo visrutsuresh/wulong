@@ -8,6 +8,13 @@ chain / DAG for a given change. Ordering is by edges, NEVER by timestamp.
 Usage:
   python3 trace-change-chain.py --change-id <slug>
   python3 trace-change-chain.py --receipt <path-or-filename>
+  python3 trace-change-chain.py --root /path/to/vault --change-id <slug>
+
+Root resolution order (explicit beats ambient):
+  1. --root CLI argument
+  2. WULONG_ROOT environment variable
+  3. The directory two levels above wulong/sync/ (the repo root in a source
+     checkout, site-packages in a wheel install)
 
 Output:
   One line per node in topological order, with predecessor edges, agent,
@@ -21,40 +28,33 @@ import argparse
 import os
 import re
 import sys
+from wulong._frontmatter import parse_frontmatter
+from wulong._root import resolve_root
 from typing import Optional
 
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
 
-VAULT    = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-RECEIPTS = os.path.join(VAULT, "Meta", "receipts")
+def _resolve_root(cli_root: Optional[str] = None) -> str:
+    """Vault root. Delegates to the ONE resolver in wulong/_root.py.
 
-# ---------------------------------------------------------------------------
-# Frontmatter parsing (minimal, inline — no import from validate-receipts)
-# ---------------------------------------------------------------------------
+    This file used to carry its own 35-line copy of the precedence, as did six
+    siblings. Seven copies of one rule in a tool whose headline defect was that
+    rule is how the copies drifted apart in the first place.
 
-def _parse_frontmatter(content: str) -> dict[str, str]:
-    """Parse YAML frontmatter into a flat dict. Returns {} if absent/broken."""
-    if not content.startswith("---"):
-        return {}
-    lines = content.split("\n")
-    close = None
-    for i, line in enumerate(lines[1:], 1):
-        if line.strip() == "---":
-            close = i
-            break
-    if close is None:
-        return {}
-    fields: dict[str, str] = {}
-    for line in lines[1:close]:
-        if not line.strip() or line.strip().startswith("#"):
-            continue
-        if ":" in line:
-            key, _, val = line.partition(":")
-            fields[key.strip()] = val.strip()
-    return fields
-
+    The floor here stays install-relative, unlike the CLI entry points which
+    raise instead. This script runs as a child with the root handed down, so the
+    floor is only reached on direct manual invocation, and a script sitting at
+    <vault>/Meta/sync/ knows its own vault.
+    """
+    return resolve_root(
+        cli_root,
+        fallback=os.path.dirname(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        ),
+        tool="trace-change-chain",
+    )
 
 def _parse_gated_by(raw: str) -> list[str]:
     """Parse a YAML inline list string into a list of filenames.
@@ -80,7 +80,7 @@ def _load_receipt(path: str) -> Optional[dict]:
             content = f.read()
     except OSError:
         return None
-    fields = _parse_frontmatter(content)
+    fields = parse_frontmatter(content)
     fname  = os.path.basename(path)
     gated_by_raw = fields.get("gated_by", "")
     gated_by     = _parse_gated_by(gated_by_raw) if gated_by_raw else []
@@ -315,6 +315,12 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description="Trace receipt causal chain via gated_by edges + change_id membership."
     )
+    p.add_argument(
+        "--root",
+        type=str,
+        default=None,
+        help="Vault root path (overrides WULONG_ROOT env var).",
+    )
     group = p.add_mutually_exclusive_group(required=True)
     group.add_argument(
         "--change-id",
@@ -331,7 +337,9 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
 
 def main(argv: Optional[list[str]] = None) -> int:
     args = parse_args(argv)
-    index = _build_index(RECEIPTS)
+    root = _resolve_root(args.root)
+    receipts_dir = os.path.join(root, "Meta", "receipts")
+    index = _build_index(receipts_dir)
 
     change_id: Optional[str] = None
     seed_fnames: list[str] = []

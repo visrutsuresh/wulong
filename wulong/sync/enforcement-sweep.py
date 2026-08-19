@@ -38,7 +38,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import NamedTuple
 
-VAULT = Path(__file__).resolve().parent.parent.parent
+from wulong._root import child_env, resolve_root
+
+# Install-relative FLOOR only, reached when no root was handed down. This script
+# runs as a child of an entry point, which passes the resolved root in the
+# environment, so this tier fires only on direct manual invocation.
+VAULT = Path(resolve_root(fallback=str(Path(__file__).resolve().parent.parent.parent),
+                          tool="enforcement-sweep"))
 SYNC = VAULT / "Meta" / "sync"
 DOCTOR = VAULT / "Meta" / "doctor"
 AGENT_MESSAGES = VAULT / "Meta" / "agent-messages.md"
@@ -99,6 +105,9 @@ def _run_validator(name: str, cmd: list[str], timeout: int) -> ValidatorResult:
         result = subprocess.run(
             cmd,
             cwd=str(VAULT),
+            # cwd alone is not enough: a validator that reads the environment
+            # would take an inherited WULONG_ROOT over its own working directory.
+            env=child_env(str(VAULT)),
             timeout=timeout,
             capture_output=True,
             text=True,

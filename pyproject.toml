@@ -1,13 +1,42 @@
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "wulong"
-version = "0.1.0"
+version = "0.4.0"
+description = "Agent definitions, audit-trail tooling and a CLI for running a multi-agent workflow on Claude Code."
 readme = "README.md"
 requires-python = ">=3.10"
+license = "Apache-2.0"
+# Explicit list, not a narrowing: setuptools' default globs already cover these
+# three, but an explicit list REPLACES the defaults, so all three must be named
+# or NOTICE and AUTHORS silently drop out of the built distribution.
+license-files = ["LICENSE", "NOTICE", "AUTHORS"]
+authors = [{ name = "Visrut Suresh" }]
+keywords = ["claude-code", "agents", "multi-agent", "governance", "audit-trail", "cli"]
+# No "License :: OSI Approved ::" classifier: with an SPDX `license` string set,
+# setuptools>=77 rejects licence classifiers as a hard build error.
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    # POSIX only: 11 scripts in wulong/sync/ hard-import fcntl.
+    "Operating System :: POSIX",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Quality Assurance",
+]
 dependencies = ["PyYAML>=6.0"]
+
+[project.urls]
+Homepage = "https://github.com/visrutsuresh/wulong"
+Repository = "https://github.com/visrutsuresh/wulong"
+Issues = "https://github.com/visrutsuresh/wulong/issues"
+Changelog = "https://github.com/visrutsuresh/wulong/blob/main/CHANGELOG.md"
 
 [project.scripts]
 wulong = "wulong.cli:main"
@@ -23,3 +52,17 @@ include = ["wulong*"]
 [tool.setuptools.package-data]
 "wulong.sync" = ["*.py", "*.json", "*.yaml", "*.sh", ".gitkeep"]
 "wulong.templates" = ["*.example"]
+# The payload keeps its natural `.claude/` layout, so it CANNOT be addressed by
+# per-directory package-data keys: `.claude` starts with a dot and
+# `skills/explain-in-plain-english` contains hyphens, and neither is a legal
+# package name. Every pattern below therefore hangs off the `wulong` package.
+# `payload/**/*.md` was tried first and silently shipped ONE file: `**` is
+# recursive in modern setuptools, but glob never descends into a dot-directory
+# unless the dot is written literally. Hence the spelled-out `.claude` segments.
+# tests/test_wheel_payload.py builds the wheel and fails on the exact counts.
+"wulong" = [
+    "payload/CLAUDE.md",
+    "payload/.claude/agents/*.md",
+    "payload/.claude/hooks/*.py",
+    "payload/.claude/skills/*/SKILL.md",
+]

@@ -9,6 +9,15 @@ Usage:
   python3 session-guard.py safe-write FILE TMP    # Atomic write: rename TMP → FILE after lock check
   python3 session-guard.py status                 # Print all active sessions
 
+Root resolution order (this script takes no --root flag):
+  1. WULONG_ROOT environment variable
+  2. The directory two levels above wulong/sync/ (the repo root in a source
+     checkout, site-packages in a wheel install)
+
+NOTE: this script and session-start-gate.py used to read different session
+registries when WULONG_ROOT was set, because only this one honoured it. Closed
+in 0.4.0: both go through the shared resolver in wulong/_root.py.
+
 AGENTS: Call `python3 Meta/sync/session-guard.py check` before writing:
   - Meta/brain.md
   - Meta/agent-messages.md
@@ -23,7 +32,22 @@ import sys
 import time
 from datetime import datetime, timezone
 
-VAULT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from wulong._root import resolve_root
+
+_THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def _resolve_root() -> str:
+    """Vault root. Delegates to the ONE resolver in wulong/_root.py.
+
+    Install-relative floor, same as the six siblings: this runs as a child with
+    the root handed down, so the floor is only reached on manual invocation.
+    """
+    return resolve_root(fallback=os.path.dirname(os.path.dirname(_THIS_DIR)),
+                        tool="session-guard")
+
+
+VAULT_ROOT = _resolve_root()
 REGISTRY_FILE = os.path.join(VAULT_ROOT, "Meta", "session-registry.json")
 CONFLICT_QUEUE = os.path.join(VAULT_ROOT, "Meta", "sync", "conflict-queue.md")
 LEDGER_FILE = os.path.join(VAULT_ROOT, "Meta", "doctor", "observe-pass-ledger.jsonl")
@@ -31,6 +55,11 @@ VIOLATIONS_FILE = os.path.join(VAULT_ROOT, "Meta", "doctor", "enforcement-violat
 HERMES_NOTEBOOK = os.path.join(VAULT_ROOT, "Meta", "hermes", "notebook.md")
 METIS_NOTEBOOK = os.path.join(VAULT_ROOT, "Meta", "metis", "notebook.md")
 STALE_MINUTES = 120  # sessions older than 2 hours are considered dead even if PID looks alive
+
+# The focus string the orchestrator agent registers with. Must match the value in
+# .claude/agents/jarvis.md ("session-guard.py register orchestrator") or every
+# ledger and observe-pass branch below is silently unreachable.
+ORCHESTRATOR_FOCUS = "orchestrator"
 
 
 def _read_registry():
@@ -151,9 +180,9 @@ def _prune_dead_sessions(registry):
         if pid_alive:
             live.append(s)
         else:
-            # Dead session — log to ledger if jarvis and not already logged
+            # Dead session: log to ledger if orchestrator and not already logged
             started_str = s.get("started", "")
-            if s.get("focus") == "jarvis":
+            if s.get("focus") == ORCHESTRATOR_FOCUS:
                 sid = _session_id(s)
                 if not _ledger_has_release_for(sid):
                     seen = _observe_seen(started_str)
@@ -212,8 +241,8 @@ def cmd_register(focus):
         registry["sessions"].append(entry)
         _write_registry(registry)
         print(f"Registered session: PID {my_pid}, focus: {focus}")
-        # Append ledger registration record for jarvis sessions
-        if focus == "jarvis":
+        # Append ledger registration record for orchestrator sessions
+        if focus == ORCHESTRATOR_FOCUS:
             sid = _session_id(entry)
             _ledger_append({
                 "event": "register",
@@ -244,8 +273,8 @@ def cmd_release():
 
     if before != after:
         print(f"Released session PID {my_pid}.")
-        # Log observe status for jarvis sessions
-        if released_entry and released_entry.get("focus") == "jarvis":
+        # Log observe status for orchestrator sessions
+        if released_entry and released_entry.get("focus") == ORCHESTRATOR_FOCUS:
             sid = _session_id(released_entry)
             if not _ledger_has_release_for(sid):
                 started_str = released_entry.get("started", "")

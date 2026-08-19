@@ -14,6 +14,13 @@ Usage examples:
   python3 Meta/sync/query-receipts.py --tag cerebrum --full
   python3 Meta/sync/query-receipts.py --change-type feature --since 2026-05-29
   python3 Meta/sync/query-receipts.py --git-log --since 2026-05-29
+  python3 Meta/sync/query-receipts.py --root /path/to/vault --count
+
+Root resolution order (explicit beats ambient):
+  1. --root CLI argument
+  2. WULONG_ROOT environment variable
+  3. The directory two levels above wulong/sync/ (the repo root in a source
+     checkout, site-packages in a wheel install)
 
 Constraints:
   - Read-only: no writes, no deletions, no file modifications.
@@ -27,14 +34,43 @@ import re
 import subprocess
 import sys
 from datetime import date, datetime
+from wulong._frontmatter import parse_frontmatter, split_frontmatter
+from wulong._root import resolve_root
 from typing import Optional
 
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
 
-VAULT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-RECEIPTS_DIR = os.path.join(VAULT, "Meta", "receipts")
+def _resolve_root(cli_root: Optional[str] = None) -> str:
+    """Vault root. Delegates to the ONE resolver in wulong/_root.py.
+
+    This file used to carry its own 35-line copy of the precedence, as did six
+    siblings. Seven copies of one rule in a tool whose headline defect was that
+    rule is how the copies drifted apart in the first place.
+
+    The floor here stays install-relative, unlike the CLI entry points which
+    raise instead. This script runs as a child with the root handed down, so the
+    floor is only reached on direct manual invocation, and a script sitting at
+    <vault>/Meta/sync/ knows its own vault.
+    """
+    return resolve_root(
+        cli_root,
+        fallback=os.path.dirname(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        ),
+        tool="query-receipts",
+    )
+
+
+_VAULT: str
+_RECEIPTS_DIR: str
+
+
+def _init_paths(root: str) -> None:
+    global _VAULT, _RECEIPTS_DIR
+    _VAULT = root
+    _RECEIPTS_DIR = os.path.join(root, "Meta", "receipts")
 
 # ---------------------------------------------------------------------------
 # Schema constants
@@ -52,37 +88,24 @@ STATUS_VALUES = {"DONE", "FAIL", "BLOCKED", "PARTIAL"}
 FILES_HEADING_RE = re.compile(r"^## Files\b", re.IGNORECASE)
 
 # ---------------------------------------------------------------------------
-# Frontmatter parser (minimal — only what we need for filtering)
+# Frontmatter: the shared reader plus this tool's own filter normalisation
 # ---------------------------------------------------------------------------
 
 def _parse_frontmatter(content: str) -> tuple[dict[str, str], str]:
-    """Parse YAML frontmatter. Returns (fields, body).
+    """Shared reader, then lowered keys and one layer of quotes removed.
 
-    fields is empty dict if frontmatter absent or unparseable.
-    body is the full content when frontmatter is absent.
+    Filters here are matched against values a user types on a command line, so
+    `--agent Coder` has to find `agent: coder` and `status: "DONE"` has to match
+    DONE. Every other caller sees keys and quotes exactly as written, which is
+    why the normalisation stays at this call site.
+
+    Returns (fields, body). fields is empty and body is the whole content when
+    frontmatter is absent or unparseable.
     """
-    if not content.startswith("---"):
+    block, body = split_frontmatter(content)
+    if block is None:
         return {}, content
-
-    lines = content.split("\n")
-    close_idx: Optional[int] = None
-    for i, line in enumerate(lines[1:], start=1):
-        if line.strip() == "---":
-            close_idx = i
-            break
-
-    if close_idx is None:
-        return {}, content
-
-    fields: dict[str, str] = {}
-    for line in lines[1:close_idx]:
-        if not line.strip() or line.strip().startswith("#"):
-            continue
-        if ":" in line:
-            key, _, val = line.partition(":")
-            fields[key.strip().lower()] = val.strip().strip("\"'")
-
-    body = "\n".join(lines[close_idx + 1:])
+    fields = {k.lower(): v.strip("\"'") for k, v in parse_frontmatter(content).items()}
     return fields, body
 
 
@@ -464,6 +487,12 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     p.add_argument(
+        "--root",
+        type=str,
+        default=None,
+        help="Vault root path (overrides WULONG_ROOT env var)",
+    )
+    p.add_argument(
         "--git-log",
         action="store_true",
         help="Append git log output (--since scoped) after receipt summaries",
@@ -474,6 +503,7 @@ def _build_parser() -> argparse.ArgumentParser:
 def main(argv: Optional[list[str]] = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
+    _init_paths(_resolve_root(getattr(args, "root", None)))
 
     # Parse --since
     since_date: Optional[date] = None
@@ -505,7 +535,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 2
 
     # Load and filter
-    all_receipts = load_all_receipts(RECEIPTS_DIR)
+    all_receipts = load_all_receipts(_RECEIPTS_DIR)
     matches = filter_receipts(
         all_receipts,
         since=since_date,
@@ -532,7 +562,7 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     # --git-log (appended after receipt output)
     if args.git_log:
-        git_output = _run_git_log(since_date, VAULT)
+        git_output = _run_git_log(since_date, _VAULT)
         print("\n--- git log ---")
         print(git_output if git_output else "(no commits in range)")
 

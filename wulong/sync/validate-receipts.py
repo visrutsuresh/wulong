@@ -28,6 +28,14 @@ Usage:
   python3 validate-receipts.py --dry-run        # print to stdout, don't write report
   python3 validate-receipts.py --strict         # exit non-zero if any violation found
   python3 validate-receipts.py --file <path>    # validate a single receipt, print result
+  python3 validate-receipts.py --smoke          # run the built-in self-test, print SMOKE OK
+  python3 validate-receipts.py --root /path/to/vault
+
+Root resolution order (explicit beats ambient):
+  1. --root CLI argument
+  2. WULONG_ROOT environment variable
+  3. The directory two levels above wulong/sync/ (the repo root in a source
+     checkout, site-packages in a wheel install)
 """
 
 import argparse
@@ -35,15 +43,34 @@ import os
 import re
 import sys
 from datetime import datetime, date
+from wulong._frontmatter import parse_frontmatter as _shared_parse
+from wulong._frontmatter import split_frontmatter
+from wulong._root import resolve_root
 from typing import Optional
 
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
 
-VAULT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-RECEIPTS_DIR = os.path.join(VAULT, "Meta", "receipts")
-REPORT_PATH = os.path.join(VAULT, "Meta", "doctor", "receipt-schema-violations.log")
+def _resolve_root(cli_root: Optional[str] = None) -> str:
+    """Vault root. Delegates to the ONE resolver in wulong/_root.py.
+
+    This file used to carry its own 35-line copy of the precedence, as did six
+    siblings. Seven copies of one rule in a tool whose headline defect was that
+    rule is how the copies drifted apart in the first place.
+
+    The floor here stays install-relative, unlike the CLI entry points which
+    raise instead. This script runs as a child with the root handed down, so the
+    floor is only reached on direct manual invocation, and a script sitting at
+    <vault>/Meta/sync/ knows its own vault.
+    """
+    return resolve_root(
+        cli_root,
+        fallback=os.path.dirname(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        ),
+        tool="validate-receipts",
+    )
 
 # ---------------------------------------------------------------------------
 # Schema constants
@@ -119,12 +146,21 @@ VT_W_VERDICT_INVALID             = "VT_W_VERDICT_INVALID"
 VT_W_REVIEW_MODE_INVALID         = "VT_W_REVIEW_MODE_INVALID"
 VT_W_VERDICT_INCOMPLETE          = "VT_W_VERDICT_INCOMPLETE"
 
+# Artifact-binding warning codes. Every other graph field is shape-validated
+# here, so an unvalidated one would let `artifact_manifest_sha256: banana` sit in
+# a receipt looking like a binding while no gate can ever match it.
+VT_W_ARTIFACT_DIGEST_INVALID     = "VT_W_ARTIFACT_DIGEST_INVALID"
+VT_W_ARTIFACT_COUNT_INVALID      = "VT_W_ARTIFACT_COUNT_INVALID"
+VT_W_ARTIFACT_BINDING_INCOMPLETE = "VT_W_ARTIFACT_BINDING_INCOMPLETE"
+VT_W_ARTIFACT_PATHS_NOT_LIST     = "VT_W_ARTIFACT_PATHS_NOT_LIST"
+
 # v3.0.2 schema constants
 V302_CUTOFF = date(2026, 5, 29)
 
 # Receipt-graph field constants
 REVIEW_MODE_ENUM    = {"plan", "output"}
 REVIEW_VERDICT_ENUM = {"PASS", "FAIL"}
+ARTIFACT_DIGEST_RE  = re.compile(r"\A[0-9a-f]{64}\Z")
 
 CHANGE_TYPE_ENUM = {"feature", "fix", "governance", "docs", "housekeeping"}
 TRIGGER_KIND_ENUM = {
@@ -137,41 +173,24 @@ RATIONALE_MAX_CHARS = 500
 
 
 # ---------------------------------------------------------------------------
-# Frontmatter parser
+# Frontmatter: the shared reader, with absence reported as None
 # ---------------------------------------------------------------------------
 
 def parse_frontmatter(content: str) -> tuple[Optional[dict[str, str]], str]:
-    """Parse YAML frontmatter from receipt content.
+    """Shared reader, but None rather than {} when there is no frontmatter.
 
-    Returns (fields_dict, body_text). fields_dict is None if frontmatter is absent
-    or unparseable. Body text excludes the frontmatter block.
+    This validator's whole job is to report a receipt with NO frontmatter as a
+    schema violation, and an empty dict cannot be told apart from a `---` block
+    that parsed to nothing. Every other caller treats both as {}, which is why
+    the distinction stays at this call site.
+
+    Returns (fields, body). fields is None when frontmatter is absent or
+    unterminated, and body is then the whole content.
     """
-    if not content.startswith("---"):
+    block, body = split_frontmatter(content)
+    if block is None:
         return None, content
-
-    lines = content.split("\n")
-    # Find closing ---
-    close_idx = None
-    for i, line in enumerate(lines[1:], start=1):
-        if line.strip() == "---":
-            close_idx = i
-            break
-
-    if close_idx is None:
-        return None, content
-
-    frontmatter_lines = lines[1:close_idx]
-    body = "\n".join(lines[close_idx + 1:])
-
-    fields: dict[str, str] = {}
-    for line in frontmatter_lines:
-        if not line.strip() or line.strip().startswith("#"):
-            continue
-        if ":" in line:
-            key, _, val = line.partition(":")
-            fields[key.strip()] = val.strip()
-
-    return fields, body
+    return _shared_parse(content), body
 
 
 # ---------------------------------------------------------------------------
@@ -509,10 +528,12 @@ def _check_graph_fields(
         })
         # Still shape-validate even on wrong agent
         _shape_validate_review_fields(fields, label, violations)
+        _shape_validate_binding_fields(fields, label, violations)
         return
 
     # Contrarian receipts only below this point
     _shape_validate_review_fields(fields, label, violations)
+    _shape_validate_binding_fields(fields, label, violations)
 
     # Incomplete pair check (new-era contrarian only)
     if is_contrarian and (has_review_mode ^ has_review_verdict):
@@ -550,6 +571,70 @@ def _shape_validate_review_fields(
             violations.append({
                 "code": VT_W_VERDICT_INVALID,
                 "detail": f"review_verdict='{val}' not in {{PASS, FAIL}} in {label}",
+                "is_warn": True,
+            })
+
+
+def _shape_validate_binding_fields(
+    fields: dict[str, str],
+    label: str,
+    violations: list[dict],
+) -> None:
+    """Check the artifact-binding fields are the shape a verifier can use.
+
+    Deliberately agent-agnostic, unlike the review fields above. A coder receipt
+    binding its own outputs is a legitimate future use, and restricting the
+    fields to contrarian receipts now would WARN on it for no reason.
+
+    artifact_paths is DIAGNOSTIC ONLY and no verifier resolves it, so it is
+    checked for shape and nothing else.
+    """
+    digest = fields.get("artifact_manifest_sha256", "").strip()
+    count = fields.get("artifact_count", "").strip()
+
+    if digest and not ARTIFACT_DIGEST_RE.match(digest):
+        violations.append({
+            "code": VT_W_ARTIFACT_DIGEST_INVALID,
+            "detail": (
+                f"artifact_manifest_sha256='{digest[:80]}' in {label} is not 64 "
+                f"lowercase hex characters, so no verifier can match it"
+            ),
+            "is_warn": True,
+        })
+
+    if count and not (count.isdigit() and int(count) >= 1):
+        violations.append({
+            "code": VT_W_ARTIFACT_COUNT_INVALID,
+            "detail": (
+                f"artifact_count='{count[:40]}' in {label} is not a positive "
+                f"integer. A manifest over zero artifacts is refused at source"
+            ),
+            "is_warn": True,
+        })
+
+    if bool(digest) != bool(count):
+        present, missing = (
+            ("artifact_manifest_sha256", "artifact_count") if digest
+            else ("artifact_count", "artifact_manifest_sha256")
+        )
+        violations.append({
+            "code": VT_W_ARTIFACT_BINDING_INCOMPLETE,
+            "detail": (
+                f"{label}: has '{present}' but missing '{missing}'. Both are "
+                f"required together, and a PASS with only one counts as unbound"
+            ),
+            "is_warn": True,
+        })
+
+    if "artifact_paths" in fields:
+        raw = fields["artifact_paths"].strip()
+        if not (raw.startswith("[") and raw.endswith("]")):
+            violations.append({
+                "code": VT_W_ARTIFACT_PATHS_NOT_LIST,
+                "detail": (
+                    f"artifact_paths='{raw[:80]}' in {label} is not a YAML "
+                    f"inline list (expected [a, b, c])"
+                ),
                 "is_warn": True,
             })
 
@@ -821,12 +906,29 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         metavar="PATH",
         help="Validate a single receipt file and print result (no report write)",
     )
+    p.add_argument(
+        "--root",
+        type=str,
+        default=None,
+        help="Vault root path (overrides WULONG_ROOT env var)",
+    )
+    p.add_argument(
+        "--smoke",
+        action="store_true",
+        help="Run the built-in self-test against a throwaway temp directory and exit",
+    )
     return p.parse_args(argv)
 
 
 def main(args: Optional[list[str]] = None) -> int:
     """Entry point. Returns exit code."""
     parsed = parse_args(args)
+    if parsed.smoke:
+        run_smoke()
+        return 0
+    root = _resolve_root(parsed.root)
+    receipts_dir = os.path.join(root, "Meta", "receipts")
+    report_path = os.path.join(root, "Meta", "doctor", "receipt-schema-violations.log")
 
     # Single-file mode
     if parsed.file:
@@ -842,14 +944,14 @@ def main(args: Optional[list[str]] = None) -> int:
             print(f"ERROR: --since must be YYYY-MM-DD, got '{parsed.since}'", file=sys.stderr)
             return 2
 
-    results = scan_receipts_dir(RECEIPTS_DIR, since=since_date)
+    results = scan_receipts_dir(receipts_dir, since=since_date)
     run_ts = datetime.now().strftime("%Y-%m-%dT%H:%M")
     section = build_report_section(results, run_ts)
 
     if parsed.dry_run:
         print(section)
     else:
-        write_report(section, REPORT_PATH)
+        write_report(section, report_path)
 
     print_summary(results)
 
@@ -959,7 +1061,4 @@ Some content without proper sections.
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    if len(sys.argv) == 1:
-        sys.exit(main(args=None))
-    else:
-        sys.exit(main())
+    sys.exit(main())

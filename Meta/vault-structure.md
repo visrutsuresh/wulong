@@ -18,7 +18,9 @@ These rules override any cleanup, consolidation, or reorganisation task.
 **Rule 1 -- Meta/ machine artifacts are NEVER reorganised.**
 `Meta/receipts/`, `Meta/handoffs/`, `Meta/handoffs/archive/`, and `Meta/Sessions/`
 carry the receipt graph (`change_id` + `gated_by` chains) validated by
-`Meta/sync/validate-receipt-graph.py`. Moving, renaming, or deleting files in these
+`validate-receipt-graph.py`, which ships in the installed package at
+`wulong/sync/` and is run by path with `--root` pointed at this vault. It is not
+copied into `Meta/sync/`. Moving, renaming, or deleting files in these
 folders silently breaks the causal graph. These folders are permanently hands-off
 for any note-cleanup or defrag operation. Only Cerebrum infrastructure scripts may
 touch them, and only to append (never to move or delete).

@@ -18,14 +18,34 @@ jobs:
         with:
           python-version: "3.11"
 
+      # `build` is a test dependency here, not just a packaging one:
+      # tests/test_wheel_payload.py and tests/test_wheel_cli.py build a wheel and
+      # inspect it, and both SKIP THEMSELVES when they cannot. The pytest step
+      # below turns any skip into a failure, so a missing `build` is a red run
+      # rather than six silently absent tests.
       - name: Install
-        run: pip install -e ".[dev]"
+        run: pip install -e ".[dev]" build
 
       - name: Set up scrub-patterns.txt
         run: cp scrub-patterns.txt.example scrub-patterns.txt
 
+      # Dogfooding: the only place the scaffolder runs against a real directory
+      # rather than a tmp_path. It also restores the repo-root CLAUDE.md that C1
+      # gitignored. The reason this comment used to give expired in 0.4.0:
+      # vault-health-check.py no longer walks up from __file__ and no longer
+      # raises, it takes --root and honours WULONG_ROOT, and the working-directory
+      # walk finds this checkout through the tracked .wulong/ directory anyway.
+      - name: Install the payload into the checkout (dogfood)
+        run: python -m wulong.cli init .
+
+      # Zero skips is the standard (docs/CONTRIBUTING.md). tests/conftest.py reads
+      # this variable and fails the session on any skip. Without it, the six wheel
+      # tests skip themselves on a build failure and the suite still summarises
+      # green with the only pip-install-user coverage gone.
       - name: Run pytest
-        run: pytest tests/ -v
+        env:
+          WULONG_REQUIRE_NO_SKIPS: "1"
+        run: pytest tests/ -v -rs
 
       - name: Run example 01 and assert output
         run: |
@@ -36,3 +56,83 @@ jobs:
         run: |
           python3 examples/02_gate_check.py > /tmp/ex02_actual.txt
           diff tests/expected/ex02.txt /tmp/ex02_actual.txt
+
+  # Asserts against the BUILT distribution, never the source tree. Two failures
+  # motivate it, and neither is visible from the tree.
+  # 1. 0.1.0 shipped with no licence field at all: PyPI reported a null licence
+  #    and METADATA carried no licence line and no licence classifier, while
+  #    LICENSE sat in the tree the whole time and was carried into the wheel.
+  # 2. Naming license-files explicitly overrides the setuptools default globs,
+  #    so NOTICE and AUTHORS can silently drop out of the built wheel while the
+  #    tree still looks correct. Building two wheels is what proved it.
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build wheel and sdist
+        run: |
+          pip install build
+          python -m build
+
+      - name: Assert built dist-info carries licences and metadata
+        run: |
+          set -euo pipefail
+          wheel=$(ls dist/*.whl)
+          echo "inspecting $wheel"
+          rm -rf /tmp/wheel && mkdir -p /tmp/wheel
+          unzip -q "$wheel" -d /tmp/wheel
+          distinfo=$(ls -d /tmp/wheel/*.dist-info)
+
+          echo "--- dist-info/licenses/ ---"
+          ls -1 "$distinfo/licenses/"
+          for f in LICENSE NOTICE AUTHORS; do
+            if [ ! -s "$distinfo/licenses/$f" ]; then
+              echo "MISSING: $f is not in dist-info/licenses/"
+              exit 1
+            fi
+          done
+
+          echo "--- METADATA (head) ---"
+          sed -n '1,40p' "$distinfo/METADATA"
+          for field in 'License-Expression: Apache-2.0' \
+                       'License-File: LICENSE' \
+                       'License-File: NOTICE' \
+                       'License-File: AUTHORS' \
+                       'Summary: ' 'Author: ' 'Project-URL: ' 'Classifier: '; do
+            if ! grep -q "^$field" "$distinfo/METADATA"; then
+              echo "MISSING METADATA field: $field"
+              exit 1
+            fi
+          done
+
+          if grep -q '^Classifier: License :: OSI Approved' "$distinfo/METADATA"; then
+            echo "FORBIDDEN: licence classifier alongside an SPDX expression"
+            exit 1
+          fi
+          echo "package assertions PASS"
+
+      # The 0.1.0 wheel shipped 67 files and zero agent definitions while all 65
+      # sat in the tree, so inspecting the source tree would reproduce the exact
+      # bug this asserts against. Counts are EXACT: a silent drop of even one
+      # file fails the build instead of reaching PyPI.
+      - name: Assert the built wheel carries the agent payload
+        run: |
+          set -euo pipefail
+          count() { unzip -Z1 "$1" | grep -c "$2" || true; }
+          wheel=$(ls dist/*.whl)
+          agents=$(count "$wheel" '^wulong/payload/\.claude/agents/.*\.md$')
+          hooks=$(count "$wheel" '^wulong/payload/\.claude/hooks/.*\.py$')
+          skills=$(count "$wheel" '^wulong/payload/\.claude/skills/.*/SKILL\.md$')
+          policy=$(count "$wheel" '^wulong/payload/CLAUDE\.md$')
+          echo "agents=$agents hooks=$hooks skills=$skills CLAUDE.md=$policy"
+          [ "$agents" -eq 65 ] || { echo "expected 65 agent definitions"; exit 1; }
+          [ "$hooks"  -eq 1  ] || { echo "expected 1 hook"; exit 1; }
+          [ "$skills" -eq 2  ] || { echo "expected 2 skills"; exit 1; }
+          [ "$policy" -eq 1  ] || { echo "expected 1 CLAUDE.md"; exit 1; }
+          echo "wheel payload assertions PASS"

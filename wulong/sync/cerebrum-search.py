@@ -7,6 +7,12 @@ company knows and how it operates. This script indexes all three tiers into an
 SQLite FTS5 virtual table (FTS5 implements BM25 ranking internally) and exposes
 a CLI for full-text search, incremental updates, index rebuilds, and statistics.
 It has zero external dependencies — stdlib only.
+
+Root resolution order (explicit beats ambient):
+  1. --root CLI argument
+  2. WULONG_ROOT environment variable
+  3. The directory two levels above wulong/sync/ (the repo root in a source
+     checkout, site-packages in a wheel install)
 """
 
 from __future__ import annotations
@@ -18,21 +24,43 @@ import sqlite3
 import sys
 import time
 from pathlib import Path
+from wulong._root import resolve_root
 from typing import Optional
 
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
 
-VAULT_ROOT = Path(__file__).parent.parent  # Meta/
-SYNC_DIR = Path(__file__).parent           # Meta/sync/
-DB_PATH = SYNC_DIR / ".cerebrum-index.db"
+TIER_NAMES = ("receipts", "playbooks", "kb")
 
-TIERS: dict[str, Path] = {
-    "receipts": VAULT_ROOT / "receipts",
-    "playbooks": VAULT_ROOT / "playbooks",
-    "kb": VAULT_ROOT / "knowledge-base",
-}
+
+def _resolve_root(cli_root: Optional[str] = None) -> str:
+    """Vault root. Delegates to the ONE resolver in wulong/_root.py.
+
+    This file used to carry its own 35-line copy of the precedence, as did six
+    siblings. Seven copies of one rule in a tool whose headline defect was that
+    rule is how the copies drifted apart in the first place.
+
+    The floor here stays install-relative, unlike the CLI entry points which
+    raise instead. This script runs as a child with the root handed down, so the
+    floor is only reached on direct manual invocation, and a script sitting at
+    <vault>/Meta/sync/ knows its own vault.
+    """
+    return resolve_root(
+        cli_root,
+        fallback=os.path.dirname(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        ),
+        tool="cerebrum-search",
+    )
+
+
+def _make_tiers(vault_meta: Path) -> dict[str, Path]:
+    return {
+        "receipts": vault_meta / "receipts",
+        "playbooks": vault_meta / "playbooks",
+        "kb": vault_meta / "knowledge-base",
+    }
 
 # ---------------------------------------------------------------------------
 # Schema helpers
@@ -41,9 +69,9 @@ TIERS: dict[str, Path] = {
 _SCHEMA_VERSION = 3  # bump on any schema change to trigger auto-rebuild
 
 
-def _connect() -> sqlite3.Connection:
+def _connect(db_path: Path) -> sqlite3.Connection:
     """Open (or create) the SQLite database and return a connection."""
-    conn = sqlite3.connect(str(DB_PATH))
+    conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -112,9 +140,9 @@ def _extract_title(filename: str, body: str) -> str:
     return Path(filename).stem.replace("-", " ").replace("_", " ")
 
 
-def _tier_for_path(path: Path) -> str:
+def _tier_for_path(path: Path, tiers: dict[str, Path]) -> str:
     """Return the tier name ('receipts'|'playbooks'|'kb') for a given file path."""
-    for name, root in TIERS.items():
+    for name, root in tiers.items():
         try:
             path.relative_to(root)
             return name
@@ -123,16 +151,16 @@ def _tier_for_path(path: Path) -> str:
     return "unknown"
 
 
-def _collect_files() -> list[Path]:
+def _collect_files(tiers: dict[str, Path]) -> list[Path]:
     """Recursively gather all .md files across all indexed tiers."""
     files: list[Path] = []
-    for root in TIERS.values():
+    for root in tiers.values():
         if root.exists():
             files.extend(root.rglob("*.md"))
     return files
 
 
-def _read_doc(path: Path) -> tuple[str, str, str, float]:
+def _read_doc(path: Path, tiers: dict[str, Path]) -> tuple[str, str, str, float]:
     """
     Read a markdown file and return (tier, title, body, mtime).
 
@@ -144,7 +172,7 @@ def _read_doc(path: Path) -> tuple[str, str, str, float]:
         raw = ""
     body = _strip_frontmatter(raw)
     title = _extract_title(path.name, body)
-    tier = _tier_for_path(path)
+    tier = _tier_for_path(path, tiers)
     mtime = path.stat().st_mtime if path.exists() else 0.0
     return tier, title, body, mtime
 
@@ -172,32 +200,32 @@ def _set_last_update(conn: sqlite3.Connection, ts: float) -> None:
     conn.commit()
 
 
-def cmd_rebuild(conn: sqlite3.Connection) -> None:
+def cmd_rebuild(conn: sqlite3.Connection, tiers: dict[str, Path]) -> None:
     """Drop and rebuild the entire index from scratch."""
     _create_schema(conn)
-    files = _collect_files()
+    files = _collect_files(tiers)
     rows = []
     for path in files:
-        tier, title, body, mtime = _read_doc(path)
+        tier, title, body, mtime = _read_doc(path, tiers)
         rows.append((str(path), tier, title, body, mtime))
     conn.executemany(
         "INSERT INTO docs (path, tier, title, body, mtime) VALUES (?, ?, ?, ?, ?)",
         rows,
     )
     _set_last_update(conn, time.time())
-    print(f"Rebuilt: {len(rows)} files indexed across {len(TIERS)} tiers.")
+    print(f"Rebuilt: {len(rows)} files indexed across {len(tiers)} tiers.")
 
 
-def cmd_update(conn: sqlite3.Connection) -> None:
+def cmd_update(conn: sqlite3.Connection, tiers: dict[str, Path]) -> None:
     """Incrementally re-index files modified since the last update."""
     last = _get_last_update(conn)
-    files = _collect_files()
+    files = _collect_files(tiers)
     updated = 0
     for path in files:
         mtime = path.stat().st_mtime if path.exists() else 0.0
         if mtime <= last:
             continue
-        tier, title, body, mtime_val = _read_doc(path)
+        tier, title, body, mtime_val = _read_doc(path, tiers)
         # Delete existing entry for this path (FTS5 has no UPDATE shortcut)
         conn.execute("DELETE FROM docs WHERE path = ?", (str(path),))
         conn.execute(
@@ -242,6 +270,7 @@ def _make_snippet(body: str, query_terms: list[str], lines: int = 2) -> str:
 def cmd_search(
     conn: sqlite3.Connection,
     query: str,
+    vault_root: Path,
     limit: int = 10,
     tier: Optional[str] = None,
 ) -> None:
@@ -279,7 +308,7 @@ def cmd_search(
     for rank, row in enumerate(rows, start=1):
         rel_path = Path(row["path"])
         try:
-            display_path = str(rel_path.relative_to(VAULT_ROOT.parent.parent))
+            display_path = str(rel_path.relative_to(vault_root.parent))
         except ValueError:
             display_path = str(rel_path)
 
@@ -301,13 +330,13 @@ def cmd_search(
 # Stats
 # ---------------------------------------------------------------------------
 
-def cmd_stats(conn: sqlite3.Connection) -> None:
+def cmd_stats(conn: sqlite3.Connection, db_path: Path) -> None:
     """Print index statistics: file count per tier, db size, last update."""
     rows = conn.execute(
         "SELECT tier, COUNT(*) AS n FROM docs GROUP BY tier ORDER BY tier"
     ).fetchall()
     total = sum(r["n"] for r in rows)
-    db_bytes = DB_PATH.stat().st_size if DB_PATH.exists() else 0
+    db_bytes = db_path.stat().st_size if db_path.exists() else 0
     db_kb = db_bytes / 1024
 
     last_ts = _get_last_update(conn)
@@ -316,8 +345,8 @@ def cmd_stats(conn: sqlite3.Connection) -> None:
     else:
         last_str = "never"
 
-    print(f"Cerebrum index stats")
-    print(f"  DB path:     {DB_PATH}")
+    print("Cerebrum index stats")
+    print(f"  DB path:     {db_path}")
     print(f"  DB size:     {db_kb:.1f} KB")
     print(f"  Last update: {last_str}")
     print(f"  Total docs:  {total}")
@@ -329,16 +358,16 @@ def cmd_stats(conn: sqlite3.Connection) -> None:
 # Smoke test
 # ---------------------------------------------------------------------------
 
-def run_smoke_test() -> None:
+def run_smoke_test(db_path: Path, tiers: dict[str, Path]) -> None:
     """
     Rebuild index, search for 'contrarian', assert at least one hit.
     Prints SMOKE OK line with counts on success; exits non-zero on failure.
     """
-    if DB_PATH.exists():
-        DB_PATH.unlink()
+    if db_path.exists():
+        db_path.unlink()
 
-    conn = _connect()
-    cmd_rebuild(conn)
+    conn = _connect(db_path)
+    cmd_rebuild(conn, tiers)
 
     row_count = conn.execute("SELECT COUNT(*) AS n FROM docs").fetchone()["n"]
 
@@ -371,7 +400,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--limit", type=int, default=10, help="Max results (default 10)")
     parser.add_argument(
         "--tier",
-        choices=list(TIERS.keys()),
+        choices=list(TIER_NAMES),
         default=None,
         help="Filter results to a single tier",
     )
@@ -380,6 +409,17 @@ def _build_parser() -> argparse.ArgumentParser:
         "--update", action="store_true", help="Incremental update (mtime-based)"
     )
     parser.add_argument("--stats", action="store_true", help="Show index statistics")
+    parser.add_argument(
+        "--smoke",
+        action="store_true",
+        help="Rebuild the index and assert it is searchable, then exit",
+    )
+    parser.add_argument(
+        "--root",
+        type=str,
+        default=None,
+        help="Vault root path (overrides WULONG_ROOT env var)",
+    )
     return parser
 
 
@@ -388,21 +428,30 @@ def main() -> None:
     parser = _build_parser()
     args = parser.parse_args()
 
-    conn = _connect()
+    root = Path(_resolve_root(getattr(args, "root", None)))
+    meta_dir = root / "Meta"
+    db_path = meta_dir / "sync" / ".cerebrum-index.db"
+    tiers = _make_tiers(meta_dir)
+
+    if args.smoke:
+        run_smoke_test(db_path, tiers)
+        return
+
+    conn = _connect(db_path)
 
     # Auto-rebuild on schema mismatch
     if not _schema_ok(conn):
         print("Schema mismatch detected — auto-rebuilding index...")
-        cmd_rebuild(conn)
+        cmd_rebuild(conn, tiers)
 
     if args.rebuild:
-        cmd_rebuild(conn)
+        cmd_rebuild(conn, tiers)
     elif args.update:
-        cmd_update(conn)
+        cmd_update(conn, tiers)
     elif args.stats:
-        cmd_stats(conn)
+        cmd_stats(conn, db_path)
     elif args.query:
-        cmd_search(conn, args.query, limit=args.limit, tier=args.tier)
+        cmd_search(conn, args.query, meta_dir, limit=args.limit, tier=args.tier)
     else:
         parser.print_help()
 
@@ -414,7 +463,4 @@ def main() -> None:
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    if len(sys.argv) == 1:
-        run_smoke_test()
-    else:
-        main()
+    main()

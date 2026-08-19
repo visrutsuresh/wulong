@@ -10,7 +10,7 @@ Returns True ONLY if ALL three conditions hold for change_id:
   3. tester receipt: status=DONE
 
 Fail-closed: missing/malformed → (False, reason).
-Reuses check_gate_precondition._parse_frontmatter (stdlib, no yaml).
+Reads receipt frontmatter through wulong._frontmatter (stdlib, no yaml).
 
 change_id: v34-rails
 """
@@ -21,11 +21,10 @@ import os
 import sys
 from typing import Optional
 
-# Reuse the parser from check_gate_precondition (same vault sync package).
-_THIS_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, _THIS_DIR)
-from check_gate_precondition import _parse_frontmatter
+from wulong._binding import reads_pass, verdict_is_binding_pass
+from wulong._frontmatter import parse_frontmatter
 
+_THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 _VAULT = os.path.dirname(os.path.dirname(_THIS_DIR))
 _DEFAULT_RECEIPTS = os.path.join(_VAULT, "Meta", "receipts")
 
@@ -60,6 +59,10 @@ def can_auto_merge(
     found_plan_pass = False
     found_output_pass = False
     found_tester_done = False
+    # A PASS that exists and is refused for carrying no artifact binding is not
+    # the same fact as no PASS existing, and the REFUSE reasons must say which.
+    unbound_plan: list[str] = []
+    unbound_output: list[str] = []
 
     for fname in entries:
         fpath = os.path.join(receipts_dir, fname)
@@ -69,7 +72,7 @@ def can_auto_merge(
         except OSError:
             continue
 
-        fields = _parse_frontmatter(text)
+        fields = parse_frontmatter(text)
 
         if fields.get("change_id", "").strip() != change_id:
             continue
@@ -77,28 +80,45 @@ def can_auto_merge(
         agent = fields.get("agent", "").strip()
         status = fields.get("status", "").strip()
         review_mode = fields.get("review_mode", "").strip()
-        review_verdict = fields.get("review_verdict", "").strip()
+        verdict_pass = verdict_is_binding_pass(fields, label=fname)
+        verdict_reads_pass = reads_pass(fields)
 
         if (
             agent == "contrarian"
             and review_mode == "plan"
-            and review_verdict == "PASS"
+            and verdict_pass
         ):
             found_plan_pass = True
+        elif agent == "contrarian" and review_mode == "plan" and verdict_reads_pass:
+            unbound_plan.append(fname)
 
         if (
             agent == "contrarian"
             and review_mode == "output"
-            and review_verdict == "PASS"
+            and verdict_pass
         ):
             found_output_pass = True
+        elif agent == "contrarian" and review_mode == "output" and verdict_reads_pass:
+            unbound_output.append(fname)
 
         if agent == "tester" and status == "DONE":
             found_tester_done = True
 
     if not found_plan_pass:
+        if unbound_plan:
+            return False, (
+                f"REFUSE: contrarian plan-review PASS receipt {unbound_plan} reads "
+                "review_verdict=PASS but is not bound to an artifact, so it was "
+                "refused under the binding requirement"
+            )
         return False, "REFUSE: no contrarian plan-review PASS receipt found for change_id"
     if not found_output_pass:
+        if unbound_output:
+            return False, (
+                f"REFUSE: contrarian output-review PASS receipt {unbound_output} reads "
+                "review_verdict=PASS but is not bound to an artifact, so it was "
+                "refused under the binding requirement"
+            )
         return (
             False,
             "REFUSE: no contrarian output-review PASS receipt found for change_id"

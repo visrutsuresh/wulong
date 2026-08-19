@@ -52,6 +52,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+from wulong._binding import binding_ok
+from wulong._frontmatter import parse_frontmatter
+
 _WULONG_ROOT = os.environ.get("WULONG_ROOT", str(Path(__file__).resolve().parent.parent.parent))  # ponytail: env knob; upgrade = set WULONG_ROOT in wulong init
 VAULT = Path(_WULONG_ROOT)
 META = VAULT / "Meta"
@@ -72,34 +75,22 @@ BANDS = [
 
 
 # ---------------------------------------------------------------------------
-# Frontmatter parser (minimal, self-contained — no yaml dep)
+# Frontmatter: the shared reader plus this tool's own inline-list coercion
 # ---------------------------------------------------------------------------
 
 def _parse_frontmatter(content: str) -> dict:
-    if not content.startswith("---"):
-        return {}
-    lines = content.split("\n")
-    close = None
-    for i, line in enumerate(lines[1:], 1):
-        if line.strip() == "---":
-            close = i
-            break
-    if close is None:
-        return {}
-    fields: dict = {}
-    for line in lines[1:close]:
-        if not line.strip() or line.strip().startswith("#"):
-            continue
-        if ":" in line:
-            key, _, val = line.partition(":")
-            key = key.strip()
-            val = val.strip()
-            # Handle YAML inline list: [a, b, c]
-            if val.startswith("[") and val.endswith("]"):
-                inner = val[1:-1]
-                fields[key] = [v.strip().strip('"').strip("'") for v in inner.split(",") if v.strip()]
-            else:
-                fields[key] = val
+    """wulong._frontmatter.parse_frontmatter, then coerce `[a, b]` to a list.
+
+    judge-score is the only caller that reads a list-shaped field, so the
+    coercion stays here. Everywhere else `gated_by: [a.md, b.md]` stays the
+    string it was written as.
+    """
+    fields: dict = dict(parse_frontmatter(content))
+    for key in list(fields):
+        val = fields[key]
+        if val.startswith("[") and val.endswith("]"):
+            inner = val[1:-1]
+            fields[key] = [v.strip().strip('"').strip("'") for v in inner.split(",") if v.strip()]
     return fields
 
 
@@ -260,10 +251,30 @@ def _get_review_verdict(receipt: Optional[dict]) -> Optional[str]:
     if receipt is None:
         return None
     v = _str_field(receipt["fields"], "review_verdict").upper()
+    if v == "PASS" and not binding_ok(receipt["fields"], label=receipt.get("fname", "")):
+        # Unbound PASS under the binding requirement. Reported as FAIL so that
+        # every caller of this function inherits the refusal: the two finders
+        # above, the C-2 gate items and the two score deductions below all read
+        # their verdict from here and none of them re-parses the field.
+        return "FAIL"
     if v in ("PASS", "FAIL"):
         return v
     # present but missing/unrecognized → FAIL (fail-closed)
     return "FAIL"
+
+
+def _reads_pass(receipt: Optional[dict]) -> bool:
+    """The RAW verdict, for explaining a deduction rather than deciding one.
+
+    `_get_review_verdict` reports an unbound PASS as FAIL so that every caller
+    inherits the refusal. A deduction label that then tells the reader the
+    receipt reads FAIL would be false, because it reads PASS. This mirrors that
+    function's own comparison, `.upper() == "PASS"`, so the explanation cannot
+    disagree with the decision it explains.
+    """
+    if receipt is None:
+        return False
+    return _str_field(receipt["fields"], "review_verdict").upper() == "PASS"
 
 
 def _get_tester_status(receipt: Optional[dict]) -> Optional[str]:
@@ -568,11 +579,19 @@ def score_change(change_id: str) -> dict:
     # Gate verdicts
     if plan_verdict == "FAIL":
         score -= 0.25
-        deductions.append("plan-review verdict FAIL (-0.25)")
+        deductions.append(
+            "plan-review PASS not bound to an artifact (-0.25)"
+            if _reads_pass(plan_receipt)
+            else "plan-review verdict FAIL (-0.25)"
+        )
 
     if output_receipt is not None and output_verdict == "FAIL":
         score -= 0.20
-        deductions.append("output-review verdict FAIL (-0.20)")
+        deductions.append(
+            "output-review PASS not bound to an artifact (-0.20)"
+            if _reads_pass(output_receipt)
+            else "output-review verdict FAIL (-0.20)"
+        )
 
     # Tester present but not DONE
     if tester_receipt is not None and tester_status != "DONE":

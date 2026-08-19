@@ -22,6 +22,14 @@ Usage:
   python3 session-close-audit.py --minutes 30
   python3 session-close-audit.py --since 2026-05-27T20:00
   python3 session-close-audit.py --skip-gate-check  # disable ADR-007 extension
+  python3 session-close-audit.py --root /path/to/vault
+  python3 session-close-audit.py --selftest         # run the built-in skill-citation self-test
+
+Root resolution order (explicit beats ambient):
+  1. --root CLI argument
+  2. WULONG_ROOT environment variable
+  3. The directory two levels above wulong/sync/ (the repo root in a source
+     checkout, site-packages in a wheel install)
 
 Output: appends to Meta/doctor/enforcement-violations.md (idempotent per-run header).
 Exit code: 0 always when block_enabled=false (v1 behaviour, default).
@@ -37,15 +45,50 @@ import re
 import sqlite3
 import sys
 from datetime import date, datetime, timedelta, timezone
+from wulong._frontmatter import parse_frontmatter
+from wulong._root import resolve_root
 from typing import Optional
 
-VAULT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-CHANGE_LOG = os.path.join(VAULT, "Meta", "change-log.md")
-RECEIPTS_DIR = os.path.join(VAULT, "Meta", "receipts")
-VIOLATIONS = os.path.join(VAULT, "Meta", "doctor", "enforcement-violations.md")
-BASELINE_FILE = os.path.join(VAULT, "Meta", "compliance", "enforcement-baseline.json")
-AUDIT_CONFIG = os.path.join(VAULT, "Meta", "sync", "session-close-audit-config.json")
-BUS_DB = os.path.join(VAULT, "Meta", "agent-bus", "bus.sqlite")
+def _resolve_root(cli_root: Optional[str] = None) -> str:
+    """Vault root. Delegates to the ONE resolver in wulong/_root.py.
+
+    This file used to carry its own 35-line copy of the precedence, as did six
+    siblings. Seven copies of one rule in a tool whose headline defect was that
+    rule is how the copies drifted apart in the first place.
+
+    The floor here stays install-relative, unlike the CLI entry points which
+    raise instead. This script runs as a child with the root handed down, so the
+    floor is only reached on direct manual invocation, and a script sitting at
+    <vault>/Meta/sync/ knows its own vault.
+    """
+    return resolve_root(
+        cli_root,
+        fallback=os.path.dirname(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        ),
+        tool="session-close-audit",
+    )
+
+
+CHANGE_LOG: str
+RECEIPTS_DIR: str
+VIOLATIONS: str
+BASELINE_FILE: str
+AUDIT_CONFIG: str
+BUS_DB: str
+
+
+def _init_paths(root: str) -> None:
+    global CHANGE_LOG, RECEIPTS_DIR, VIOLATIONS, BASELINE_FILE, AUDIT_CONFIG, BUS_DB
+    CHANGE_LOG = os.path.join(root, "Meta", "change-log.md")
+    RECEIPTS_DIR = os.path.join(root, "Meta", "receipts")
+    VIOLATIONS = os.path.join(root, "Meta", "doctor", "enforcement-violations.md")
+    BASELINE_FILE = os.path.join(root, "Meta", "compliance", "enforcement-baseline.json")
+    AUDIT_CONFIG = os.path.join(root, "Meta", "sync", "session-close-audit-config.json")
+    BUS_DB = os.path.join(root, "Meta", "agent-bus", "bus.sqlite")
+
+
+_init_paths(_resolve_root())
 
 # Agents exempt from receipt requirement (light I/O, no per-task receipt convention)
 EXEMPT_AGENTS = {"session-guard", "watch-meta", "compile-context", "cron", "system"}
@@ -67,6 +110,7 @@ def parse_args():
     p.add_argument("--minutes", type=int, default=60, help="Window in minutes (default 60)")
     p.add_argument("--since", type=str, default=None, help="Explicit ISO timestamp (overrides --minutes)")
     p.add_argument("--dry-run", action="store_true", help="Print to stdout, don't append violations")
+    p.add_argument("--root", type=str, default=None, help="Vault root path (overrides WULONG_ROOT env var)")
     p.add_argument(
         "--skip-gate-check",
         action="store_true",
@@ -131,31 +175,18 @@ def scan_receipts(since):
 
 
 def _parse_receipt_frontmatter(path: str) -> dict[str, str]:
-    """Parse YAML-like frontmatter from a receipt file. Returns {} on any error."""
+    """Read the first 4096 bytes of a receipt and parse them. {} on any error.
+
+    The read window is the reason this wrapper exists. Three tools cap the read
+    and the rest read the whole file, so the window belongs to the caller and
+    not to the shared reader, which takes text and never opens a file.
+    """
     try:
         with open(path, "r", encoding="utf-8", errors="ignore") as fh:
             text = fh.read(4096)
     except OSError:
         return {}
-    if not text.startswith("---"):
-        return {}
-    lines = text.split("\n")
-    close: Optional[int] = None
-    for i, line in enumerate(lines[1:], 1):
-        if line.strip() == "---":
-            close = i
-            break
-    if close is None:
-        return {}
-    fields: dict[str, str] = {}
-    for line in lines[1:close]:
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
-            continue
-        if ":" in stripped:
-            key, _, val = stripped.partition(":")
-            fields[key.strip()] = val.strip()
-    return fields
+    return parse_frontmatter(text)
 
 
 # NN#18 MISSING_SKILL_CITATION check
@@ -507,6 +538,7 @@ def write_violations(violations, gate_violations, skill_violations, bus_violatio
 
 def main():
     args = parse_args()
+    _init_paths(_resolve_root(getattr(args, "root", None)))
     since = window_start(args)
     skip_gc = getattr(args, "skip_gate_check", False)
     violations, gate_violations, skill_violations, bus_violations, cl_agents, rc_agents = audit(since, skip_gate_check=skip_gc)
@@ -629,7 +661,7 @@ def _selftest_skill_citations():
 
     for r in results:
         print(f"[selftest] {r}")
-    print("[selftest] All 4 cases PASS — exit 0 confirmed")
+    print(f"[selftest] All {len(results)} cases PASS, exit 0 confirmed")
 
 
 if __name__ == "__main__":
@@ -637,8 +669,3 @@ if __name__ == "__main__":
         _selftest_skill_citations()
         sys.exit(0)
     sys.exit(main())
-
-
-if "--selftest" in sys.argv:
-    _selftest_skill_citations()
-    sys.exit(0)

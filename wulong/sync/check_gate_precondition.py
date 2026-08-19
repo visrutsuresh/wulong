@@ -37,46 +37,28 @@ import os
 import sys
 from typing import Optional
 
+from wulong._binding import (
+    ENV_LEGACY_UNTIL,
+    FIELD_COUNT,
+    FIELD_DIGEST,
+    reads_pass,
+    verdict_is_binding_pass,
+)
+from wulong._frontmatter import parse_frontmatter
+from wulong._manifest import ManifestError, manifest_digest
+from wulong._root import ENV_VAR, RootNotFound, resolve_root
+
 # ---------------------------------------------------------------------------
 # Paths (fail-closed defaults)
 # ---------------------------------------------------------------------------
 
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
-_VAULT = os.path.dirname(os.path.dirname(_THIS_DIR))
-_DEFAULT_RECEIPTS = os.path.join(_VAULT, "Meta", "receipts")
+# Install-relative floor only. In a wheel this is site-packages, which is why it
+# is a floor and not an answer: the real root arrives via --root or WULONG_ROOT.
+_INSTALL_RELATIVE = os.path.dirname(os.path.dirname(_THIS_DIR))
+_DEFAULT_RECEIPTS = os.path.join(_INSTALL_RELATIVE, "Meta", "receipts")
 
 VALID_GATES = {"nn3", "nn4"}
-
-# ---------------------------------------------------------------------------
-# Frontmatter parser (minimal, stdlib-only)
-# ---------------------------------------------------------------------------
-
-def _parse_frontmatter(text: str) -> dict[str, str]:
-    """Parse YAML-like frontmatter between the first pair of '---' delimiters.
-
-    Returns an empty dict if the file does not start with '---' or has no
-    closing delimiter. Intentionally does not import yaml — stdlib only.
-    """
-    if not text.startswith("---"):
-        return {}
-    lines = text.split("\n")
-    close: Optional[int] = None
-    for i, line in enumerate(lines[1:], 1):
-        if line.strip() == "---":
-            close = i
-            break
-    if close is None:
-        return {}
-    fields: dict[str, str] = {}
-    for line in lines[1:close]:
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
-            continue
-        if ":" in stripped:
-            key, _, val = stripped.partition(":")
-            fields[key.strip()] = val.strip()
-    return fields
-
 
 # ---------------------------------------------------------------------------
 # Gate result type
@@ -120,6 +102,7 @@ def check_gate_precondition(
     change_id: str,
     gate: str,
     receipts_dir: Optional[str] = None,
+    require_binding: Optional[bool] = None,
 ) -> GateResult:
     """Pre-spawn existence oracle. Scans receipts_dir RIGHT NOW.
 
@@ -132,6 +115,11 @@ def check_gate_precondition(
     receipts_dir:
         Path to scan. Defaults to Meta/receipts/ relative to this file's vault root.
         Inject a tempdir in tests.
+    require_binding:
+        True refuses a PASS that carries no artifact manifest digest, False
+        allows one, None takes the WULONG_REQUIRE_BINDING variable and then the
+        migration default in wulong/_binding.py. Only the nn3 gate consults it;
+        nn4 keys off `status` and is a separate change.
 
     Returns
     -------
@@ -175,6 +163,11 @@ def check_gate_precondition(
             gate=gate,
         )
 
+    # A plan-review PASS that exists and is REFUSED for carrying no artifact
+    # binding is a different fact from no plan-review PASS existing at all, and
+    # the REFUSE reason at the bottom has to say which one happened.
+    unbound_pass: list[str] = []
+
     for fname in entries:
         fpath = os.path.join(receipts_dir, fname)
         try:
@@ -183,7 +176,7 @@ def check_gate_precondition(
         except OSError:
             continue
 
-        fields = _parse_frontmatter(text)
+        fields = parse_frontmatter(text)
 
         # Every check starts with: does this receipt belong to our change_id?
         if fields.get("change_id", "").strip() != change_id:
@@ -191,10 +184,13 @@ def check_gate_precondition(
 
         if gate == "nn3":
             # ALLOW iff agent=contrarian, review_mode=plan, review_verdict=PASS
-            if (
+            is_plan_review = (
                 fields.get("agent", "").strip() == "contrarian"
                 and fields.get("review_mode", "").strip() == "plan"
-                and fields.get("review_verdict", "").strip() == "PASS"
+            )
+            if (
+                is_plan_review
+                and verdict_is_binding_pass(fields, label=fname, require=require_binding)
             ):
                 return GateResult(
                     verdict="ALLOW",
@@ -205,6 +201,8 @@ def check_gate_precondition(
                     gate=gate,
                     matching_receipt=fname,
                 )
+            if is_plan_review and reads_pass(fields):
+                unbound_pass.append(fname)
 
         elif gate == "nn4":
             # ALLOW iff agent=tester, status=DONE
@@ -221,7 +219,14 @@ def check_gate_precondition(
                 )
 
     # No satisfying receipt found
-    if gate == "nn3":
+    if gate == "nn3" and unbound_pass:
+        reason = (
+            f"contrarian plan-review receipt {unbound_pass} reads "
+            "review_verdict=PASS but is not bound to an artifact, so it was "
+            "refused under the binding requirement. Stamp it with `wulong gate "
+            "--manifest --artifact PATH`. Coder spawn REFUSED"
+        )
+    elif gate == "nn3":
         reason = (
             "no contrarian receipt with agent=contrarian, review_mode=plan, "
             "review_verdict=PASS found for change_id — coder spawn REFUSED"
@@ -270,19 +275,185 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Override path to receipts directory (default: Meta/receipts/ in vault)",
     )
     p.add_argument(
+        "--root",
+        default=None,
+        metavar="PATH",
+        help=f"Vault root. Wins over the {ENV_VAR} env var. "
+             "Receipts are read from <root>/Meta/receipts unless --receipts-dir says otherwise.",
+    )
+    p.add_argument(
         "--quiet",
         action="store_true",
         help="Suppress stdout (exit code still indicates result)",
     )
+    p.add_argument(
+        "--require-binding",
+        action="store_true",
+        help="REFUSE an nn3 PASS that carries no artifact manifest digest. "
+             "Default OFF during the migration window; a warning is printed "
+             "instead. Becomes the default at 0.6.0.",
+    )
+    p.add_argument(
+        "--legacy-unbound-until",
+        default=None,
+        metavar="YYYY-MM-DD",
+        help="ADVISORY exemption: accept an unbound PASS on a receipt dated "
+             "before this. It keys off the receipt's OWN self-reported date "
+             "field, so it is a convenience for an old corpus, not a control.",
+    )
     return p
 
 
+# ---------------------------------------------------------------------------
+# Artifact modes: --manifest writes the digest, --verify recomputes it
+# ---------------------------------------------------------------------------
+
+_ARTIFACT_FLAGS = ("--manifest", "--verify")
+
+
+def _is_artifact_mode(argv: list[str]) -> bool:
+    return any(
+        tok in _ARTIFACT_FLAGS or tok.startswith("--verify=") for tok in argv
+    )
+
+
+def _build_artifact_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(
+        prog="wulong gate",
+        description=(
+            "Artifact manifest modes. --manifest prints the digest to stamp into "
+            "a receipt; --verify recomputes it from the bytes you name and "
+            "compares. Neither reads a vault."
+        ),
+    )
+    mode = p.add_mutually_exclusive_group(required=True)
+    mode.add_argument(
+        "--manifest",
+        action="store_true",
+        help="Print the manifest digest and a paste-ready frontmatter block.",
+    )
+    mode.add_argument(
+        "--verify",
+        default=None,
+        metavar="RECEIPT",
+        help="Recompute the manifest and compare it to RECEIPT's recorded digest.",
+    )
+    p.add_argument(
+        "--artifact",
+        action="append",
+        default=[],
+        metavar="PATH",
+        help="An artifact to hash. Repeat once per artifact. YOU enumerate them: "
+             "no mode reads a file list out of the receipt.",
+    )
+    # Accepted and unused. `wulong gate` normally gets a --root injected, and a
+    # user may type one out of habit. Neither artifact mode resolves a vault.
+    p.add_argument("--root", default=None, help=argparse.SUPPRESS)
+    return p
+
+
+def _gated_by_names(raw: str) -> list[str]:
+    """Split a `[a.md, b.md]` inline list into its entries."""
+    text = raw.strip()
+    if text.startswith("[") and text.endswith("]"):
+        text = text[1:-1]
+    return [item.strip().strip("'\"") for item in text.split(",") if item.strip()]
+
+
+def _run_artifact_mode(argv: list[str]) -> int:
+    args = _build_artifact_parser().parse_args(argv)
+    if not args.artifact:
+        print(
+            "wulong gate: --artifact is required at least once. The CALLER "
+            "enumerates the artifacts; a receipt's Files-written list is a "
+            "fail-open prose parser and is never used as the enumeration source.",
+            file=sys.stderr,
+        )
+        return 2
+    try:
+        digest = manifest_digest(args.artifact)
+    except ManifestError as exc:
+        print(f"[REFUSE] {exc}", file=sys.stderr)
+        return 1
+
+    count = len(args.artifact)
+    if args.manifest:
+        print(f"artifact_manifest_sha256: {digest}")
+        print(f"artifact_count: {count}")
+        print(f"artifact_paths: [{', '.join(args.artifact)}]")
+        print(
+            "\nartifact_paths is DIAGNOSTIC ONLY. No verifier resolves it, and "
+            "no path is inside the digest.",
+            file=sys.stderr,
+        )
+        return 0
+
+    try:
+        with open(args.verify, "r", encoding="utf-8", errors="ignore") as handle:
+            fields = parse_frontmatter(handle.read())
+    except OSError as exc:
+        print(f"wulong gate: cannot read receipt: {exc}", file=sys.stderr)
+        return 2
+
+    # BA-2: the bytes come from --artifact and are recomputed. The receipt's own
+    # artifact_paths field is deliberately NOT read here, because reading it
+    # would make a recorded path load-bearing and falsify the published claim.
+    recorded = fields.get(FIELD_DIGEST, "").strip()
+    if not recorded:
+        print(
+            f"[UNBOUND] {args.verify}: no {FIELD_DIGEST} field, so there is "
+            "nothing to verify against.",
+            file=sys.stderr,
+        )
+        return 1
+
+    recorded_count = fields.get(FIELD_COUNT, "").strip()
+    if recorded != digest:
+        print(
+            f"[MISMATCH] {args.verify}: recorded {recorded}, recomputed {digest} "
+            f"over {count} artifact(s) (receipt says {recorded_count or 'no count'})",
+            file=sys.stderr,
+        )
+        return 1
+
+    # BA-4: the manifest is authoritative for WHAT WAS HASHED, gated_by for graph
+    # topology. They need not be co-extensive, so a predecessor outside the
+    # manifest is REPORTED and never refused.
+    supplied = {os.path.basename(a) for a in args.artifact}
+    outside = [g for g in _gated_by_names(fields.get("gated_by", "")) if g not in supplied]
+    for name in outside:
+        print(
+            f"[REPORT] {args.verify}: gated_by names '{name}', which is not in "
+            "the manifest. gated_by is graph topology; the manifest is what was "
+            "hashed. Not a failure."
+        )
+    print(f"[VERIFIED] {args.verify}: manifest digest matches over {count} artifact(s)")
+    return 0
+
+
 def main(argv: Optional[list[str]] = None) -> int:
+    tokens = list(sys.argv[1:] if argv is None else argv)
+    if _is_artifact_mode(tokens):
+        return _run_artifact_mode(tokens)
+
     args = _build_parser().parse_args(argv)
+    if args.legacy_unbound_until:
+        os.environ[ENV_LEGACY_UNTIL] = args.legacy_unbound_until
+
+    receipts_dir = args.receipts_dir
+    if receipts_dir is None:
+        try:
+            root = resolve_root(args.root, tool="wulong gate")
+        except RootNotFound as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        receipts_dir = os.path.join(root, "Meta", "receipts")
+
     result = check_gate_precondition(
         change_id=args.change_id,
         gate=args.gate,
-        receipts_dir=args.receipts_dir,
+        receipts_dir=receipts_dir,
+        require_binding=True if args.require_binding else None,
     )
     if not args.quiet:
         print(result)

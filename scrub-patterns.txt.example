@@ -3,8 +3,42 @@
 # Copy this file to scrub-patterns.txt and fill in YOUR private tokens.
 # scrub-patterns.txt is gitignored and never committed.
 #
-# Each non-blank, non-comment line is a case-insensitive extended-regex (grep -Ei).
-# A match in any tracked file (except the excluded tooling files) causes scrub.sh to exit 1.
+# LINE FORMAT
+#
+#   [tag]... <regex>          # optional trailing comment
+#
+# The regex is everything after the leading tags and before an inline "#". It is
+# a case-insensitive extended regex (grep -Ei). A match in any tracked file
+# (except the excluded tooling files) makes scripts/scrub.sh exit 1.
+#
+# TWO TAGS. They exempt different checks and are not interchangeable. Both must
+# LEAD the line: the trailing comment is stripped before the line is used as a
+# regex, so a tag parked in the comment is stripped with it.
+#
+#   [allow-author]   Skips the pre-publish AUTHOR check only.
+#                    Use it for a name you commit under: docs/CONTRIBUTING.md
+#                    requires a real name on every DCO sign-off. The file scan
+#                    still enforces the line, so the value is still blocked
+#                    from appearing inside a tracked file.
+#
+#   [allow-public]   Skips the FILE SCAN only.
+#                    Narrow escape hatch for a value that is public by
+#                    construction and therefore expected in your own files: a
+#                    GitHub handle appears in every clone and install URL in
+#                    the README, and a copyright holder appears in LICENSE,
+#                    NOTICE and AUTHORS. Do not use it for an address, a host,
+#                    an IP, or anything you would mind seeing in a search
+#                    engine. A value that is both (your own name, published in
+#                    LICENSE) carries both tags.
+#
+# MIGRATION from 0.1.0 (the only release ever published): the tag used to sit in
+# the trailing comment,
+# and the file scan passed that comment straight to grep, so every line was a
+# regex that matched nothing. Both scripts now strip the comment. If your
+# scrub-patterns.txt still ends a line with "# ... [allow-author]", move the tag
+# to the front of the line. Until you do, both scripts print a WARN naming the
+# line, the author check stops exempting it, and the file scan starts enforcing
+# it. Nothing is silently exempted.
 #
 # Usage:
 #   cp scrub-patterns.txt.example scrub-patterns.txt
@@ -16,9 +50,13 @@
 /Users/<your-username>     # macOS home path leak
 
 # --- Personal identity ---
-<your-username>            # lowercase username (e.g. johndoe)
-\b<YourFirstName>\b        # first name word-boundary match
-\b<YourLastName>\b         # last name word-boundary match
+# Tagged [allow-author] so your own DCO sign-off does not fail check (b), and
+# deliberately NOT tagged [allow-public]: the file scan still enforces them.
+# Add [allow-public] to a line only after the scan flags it in a file you are
+# publishing on purpose.
+[allow-author] <your-username>          # lowercase username (e.g. johndoe)
+[allow-author] \b<YourFirstName>\b      # first name word-boundary match
+[allow-author] \b<YourLastName>\b       # last name word-boundary match
 <your-employer>            # company / school name
 
 # --- Project codenames ---

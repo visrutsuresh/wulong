@@ -24,6 +24,13 @@ Usage:
   --change-id X       Scope validation to a single change_id (clean single-change verdict).
   --warn-only         Default. Print violations but always exit 0.
   --strict            Exit 1 if any violation found.
+  --root PATH         Vault root. Wins over the WULONG_ROOT env var.
+
+Root resolution order (explicit beats ambient):
+  1. --root CLI argument
+  2. WULONG_ROOT environment variable
+  3. The directory two levels above wulong/sync/ (the repo root in a source
+     checkout, site-packages in a wheel install)
 """
 
 import argparse
@@ -32,44 +39,39 @@ import re
 import sys
 from collections import defaultdict, deque
 from datetime import date
+from wulong._binding import reads_pass, verdict_is_binding_pass
+from wulong._frontmatter import parse_frontmatter
+from wulong._root import resolve_root
 from typing import Optional
 
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
 
-VAULT    = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-RECEIPTS = os.path.join(VAULT, "Meta", "receipts")
+def _resolve_root(cli_root: Optional[str] = None) -> str:
+    """Vault root. Delegates to the ONE resolver in wulong/_root.py.
+
+    This file used to carry its own 35-line copy of the precedence, as did six
+    siblings. Seven copies of one rule in a tool whose headline defect was that
+    rule is how the copies drifted apart in the first place.
+
+    The floor here stays install-relative, unlike the CLI entry points which
+    raise instead. This script runs as a child with the root handed down, so the
+    floor is only reached on direct manual invocation, and a script sitting at
+    <vault>/Meta/sync/ knows its own vault.
+    """
+    return resolve_root(
+        cli_root,
+        fallback=os.path.dirname(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        ),
+        tool="validate-receipt-graph",
+    )
 
 # Only receipts from this date onward carry graph fields (new-era)
 GRAPH_ERA_CUTOFF = date(2026, 5, 30)
 
 CODER_CHANGE_TYPES = {"feature", "fix"}
-
-# ---------------------------------------------------------------------------
-# Frontmatter parsing
-# ---------------------------------------------------------------------------
-
-def _parse_frontmatter(content: str) -> dict[str, str]:
-    if not content.startswith("---"):
-        return {}
-    lines = content.split("\n")
-    close = None
-    for i, line in enumerate(lines[1:], 1):
-        if line.strip() == "---":
-            close = i
-            break
-    if close is None:
-        return {}
-    fields: dict[str, str] = {}
-    for line in lines[1:close]:
-        if not line.strip() or line.strip().startswith("#"):
-            continue
-        if ":" in line:
-            key, _, val = line.partition(":")
-            fields[key.strip()] = val.strip()
-    return fields
-
 
 def _parse_gated_by(raw: str) -> list[str]:
     raw = raw.strip()
@@ -101,7 +103,7 @@ def _load_receipt(path: str) -> Optional[dict]:
     except OSError:
         return None
 
-    fields = _parse_frontmatter(content)
+    fields = parse_frontmatter(content)
     fm_date = _parse_date(fields.get("date", ""))
 
     gated_by_raw = fields.get("gated_by", "")
@@ -117,6 +119,11 @@ def _load_receipt(path: str) -> Optional[dict]:
         "session_id":     fields.get("session_id", "").strip(),
         "review_mode":    fields.get("review_mode", "").strip(),
         "review_verdict": fields.get("review_verdict", "").strip(),
+        # Carried so the binding predicate reads the same record every verdict
+        # decision in this file reads. "date" below is the receipt's own
+        # self-reported date, which is what the ADVISORY legacy exemption uses.
+        "artifact_manifest_sha256": fields.get("artifact_manifest_sha256", "").strip(),
+        "artifact_count":  fields.get("artifact_count", "").strip(),
         "gated_by":       gated_by,
         "date":           fm_date,
     }
@@ -293,20 +300,37 @@ def _check_nn3(
         # Check if any of those has review_verdict=PASS
         passing = [
             a for a in contrarian_plan_receipts
-            if index[a]["review_verdict"] == "PASS"
+            if verdict_is_binding_pass(index[a], label=a)
         ]
         if passing:
             continue  # NN#3 satisfied
 
-        # Contrarian present but verdict absent or non-PASS
+        # Contrarian present but no usable PASS. Two different facts reach here
+        # and the reason has to name the right one. A plan review that genuinely
+        # reads FAIL is not the same thing as a plan review that reads PASS and
+        # was refused for carrying no artifact binding. The ancestor walk above
+        # is not change_id scoped, so a FAIL from elsewhere in the graph can sit
+        # beside the unbound PASS that is the actual cause of the refusal, and
+        # reporting only the FAIL tells the reader a PASS receipt says FAIL.
         verdicts = [index[a]["review_verdict"] for a in contrarian_plan_receipts]
+        unbound_pass = [a for a in contrarian_plan_receipts if reads_pass(index[a])]
         if any(v == "FAIL" for v in verdicts):
-            viols.append({
-                "code": "NN3_VIOLATION",
-                "detail": (
+            if unbound_pass:
+                detail = (
+                    f"coder receipt '{coder_fname}': reachable contrarian plan-review "
+                    f"{unbound_pass} reads review_verdict=PASS but is not bound to an "
+                    f"artifact, so it was refused under the binding requirement; a "
+                    f"different reachable plan-review reads review_verdict=FAIL. "
+                    f"Neither satisfies the gate"
+                )
+            else:
+                detail = (
                     f"coder receipt '{coder_fname}': reachable contrarian plan-review has "
                     f"review_verdict=FAIL — gate not satisfied"
-                ),
+                )
+            viols.append({
+                "code": "NN3_VIOLATION",
+                "detail": detail,
                 "change_id": change_id,
                 "receipt": coder_fname,
             })
@@ -316,8 +340,9 @@ def _check_nn3(
                 "code": "NN3_COVERAGE_GAP",
                 "detail": (
                     f"coder receipt '{coder_fname}': contrarian plan-review reachable but "
-                    f"review_verdict absent/UNKNOWN on {contrarian_plan_receipts} — "
-                    f"fail-closed: NOT a pass"
+                    f"no usable review_verdict=PASS on {contrarian_plan_receipts}: "
+                    f"absent, unrecognised, or PASS not bound to an artifact. "
+                    f"Fail-closed: NOT a pass"
                 ),
                 "change_id": change_id,
                 "receipt": coder_fname,
@@ -341,23 +366,17 @@ def _check_nn4(
     ]
 
     for dep_fname in deployer_receipts:
+        # _reachable_descendants already walks the full forward closure, so
+        # there is nothing to widen here. C0 removed a second pass that re-called
+        # it with identical arguments and re-ran an identical predicate over the
+        # identical set: a provable no-op, and its comment claimed a widening to
+        # out-of-change_id successors that the code never performed.
         descendants = _reachable_descendants(dep_fname, index, change_id)
-        # Also include indirect descendants not in same change_id that are
-        # direct forward successors
         tester_found = any(
             d for d in descendants
             if d in index and index[d]["agent"] == "tester"
             and index[d]["status"] == "DONE"
         )
-        if not tester_found:
-            # Check all receipts that list dep_fname in gated_by (anywhere, not just same cid)
-            global_descendants = _reachable_descendants(dep_fname, index, change_id)
-            tester_found = any(
-                d for d in global_descendants
-                if d in index and index[d]["agent"] == "tester"
-                and index[d]["status"] == "DONE"
-            )
-
         if not tester_found:
             viols.append({
                 "code": "NN4_VIOLATION",
@@ -392,11 +411,11 @@ def _check_nn10(
 
     plan_passes = [
         f for f in contrarian_members
-        if index[f]["review_mode"] == "plan" and index[f]["review_verdict"] == "PASS"
+        if index[f]["review_mode"] == "plan" and verdict_is_binding_pass(index[f], label=f)
     ]
     output_passes = [
         f for f in contrarian_members
-        if index[f]["review_mode"] == "output" and index[f]["review_verdict"] == "PASS"
+        if index[f]["review_mode"] == "output" and verdict_is_binding_pass(index[f], label=f)
     ]
     plan_reviews = [f for f in contrarian_members if index[f]["review_mode"] == "plan"]
     output_reviews = [f for f in contrarian_members if index[f]["review_mode"] == "output"]
@@ -407,13 +426,22 @@ def _check_nn10(
             sub = "VERDICT_UNKNOWN" if not any(
                 index[f]["review_verdict"] for f in plan_reviews
             ) else "PLAN_GATE_MISSING"
-            viols.append({
-                "code": f"NN10_INCOMPLETE",
-                "sub": sub,
-                "detail": (
+            unbound_pass = [f for f in plan_reviews if reads_pass(index[f])]
+            if unbound_pass:
+                detail = (
+                    f"change_id='{change_id}': contrarian plan-review {unbound_pass} "
+                    f"reads review_verdict=PASS but is not bound to an artifact, so it "
+                    f"was refused under the binding requirement. sub={sub}"
+                )
+            else:
+                detail = (
                     f"change_id='{change_id}' has contrarian plan-review(s) but none with "
                     f"review_verdict=PASS — sub={sub}"
-                ),
+                )
+            viols.append({
+                "code": "NN10_INCOMPLETE",
+                "sub": sub,
+                "detail": detail,
                 "change_id": change_id,
                 "receipt": change_id,
             })
@@ -431,13 +459,22 @@ def _check_nn10(
             sub = "VERDICT_UNKNOWN" if not any(
                 index[f]["review_verdict"] for f in output_reviews
             ) else "OUTPUT_GATE_MISSING"
+            unbound_pass = [f for f in output_reviews if reads_pass(index[f])]
+            if unbound_pass:
+                detail = (
+                    f"change_id='{change_id}': contrarian output-review {unbound_pass} "
+                    f"reads review_verdict=PASS but is not bound to an artifact, so it "
+                    f"was refused under the binding requirement. sub={sub}"
+                )
+            else:
+                detail = (
+                    f"change_id='{change_id}' has contrarian output-review(s) but none with "
+                    f"review_verdict=PASS — sub={sub}"
+                )
             viols.append({
                 "code": "NN10_INCOMPLETE",
                 "sub": sub,
-                "detail": (
-                    f"change_id='{change_id}' has contrarian output-review(s) but none with "
-                    f"review_verdict=PASS — sub={sub}"
-                ),
+                "detail": detail,
                 "change_id": change_id,
                 "receipt": change_id,
             })
@@ -474,7 +511,7 @@ def _is_complete(
             if f in index
             and index[f]["agent"] == "contrarian"
             and index[f]["review_mode"] == "output"
-            and index[f]["review_verdict"] == "PASS"
+            and verdict_is_binding_pass(index[f], label=f)
         ]
         return bool(output_passes)
 
@@ -496,7 +533,7 @@ def _is_complete(
             if d in index
             and index[d]["agent"] == "contrarian"
             and index[d]["review_mode"] == "output"
-            and index[d]["review_verdict"] == "PASS"
+            and verdict_is_binding_pass(index[d], label=d)
         )
         if has_output_pass:
             return True
@@ -630,11 +667,19 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         default=False,
         help="Exit 1 if any violation found.",
     )
+    p.add_argument(
+        "--root",
+        type=str,
+        default=None,
+        help="Vault root path (overrides WULONG_ROOT env var).",
+    )
     return p.parse_args(argv)
 
 
 def main(argv: Optional[list[str]] = None) -> int:
     args = parse_args(argv)
+    root = _resolve_root(args.root)
+    receipts_dir = os.path.join(root, "Meta", "receipts")
 
     since: Optional[date] = None
     if args.since:
@@ -645,7 +690,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                   file=sys.stderr)
             return 2
 
-    index = _load_all(RECEIPTS, since=since)
+    index = _load_all(receipts_dir, since=since)
 
     # --change-id: filter the loaded index to only members of that change_id
     # (load all for chain completeness, then restrict)

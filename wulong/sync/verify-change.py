@@ -7,7 +7,7 @@ Answers: "Did this change actually land correctly?"
 Checks D1-D8 from Meta/definition-of-done.md against a single change_id.
 HARD failures (D1-D4, D6) flip the verdict RED.
 SOFT checks (D5, D8) print as WARN and do not flip GREEN→RED in v1.
-D7 is plug-in-gated (always N/A in v1 — no plug-ins registered yet).
+D7 is always N/A: its plug-in dispatch was removed in 0.4.0 (see SECURITY.md).
 
 Usage:
   python3 verify-change.py --change-id X [--strict] [--json] [--report-out PATH]
@@ -28,6 +28,9 @@ import sys
 from datetime import date
 from typing import Optional
 
+from wulong._frontmatter import parse_frontmatter
+from wulong._root import resolve_root
+
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
@@ -35,46 +38,25 @@ from typing import Optional
 # Script lives at <vault>/Meta/sync/verify-change.py
 # META_DIR = <vault>/Meta
 # VAULT_ROOT = <vault>  (the Obsidian root — receipts claim paths relative to this)
-META_DIR   = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-VAULT_ROOT = os.path.dirname(META_DIR)
+# Install-relative FLOOR only, reached when no root was handed down. This script
+# runs as a child of an entry point, which passes the resolved root in the
+# environment, so this tier fires only on direct manual invocation.
+VAULT_ROOT = resolve_root(
+    fallback=os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    tool="verify-change",
+)
+META_DIR   = os.path.join(VAULT_ROOT, "Meta")
 
 VAULT    = META_DIR   # keep alias for sub-module calls that expect Meta dir
 RECEIPTS = os.path.join(META_DIR, "receipts")
 SYNC_DIR = os.path.join(META_DIR, "sync")
-QA_DIR   = os.path.join(META_DIR, "qa")
 
 VALIDATE_RECEIPTS      = os.path.join(SYNC_DIR, "validate-receipts.py")
 VALIDATE_GRAPH         = os.path.join(SYNC_DIR, "validate-receipt-graph.py")
 SESSION_CLOSE_AUDIT    = os.path.join(SYNC_DIR, "session-close-audit.py")
-PLUGINS_YAML           = os.path.join(QA_DIR,   "e2e-plugins.yaml")
 
 # Remote path prefixes that cannot be checked locally — skip with NOTE
 REMOTE_PATH_PREFIXES = ("/root/", "/home/", "root@", "~root/")
-
-# ---------------------------------------------------------------------------
-# Frontmatter parser (minimal — only what we need)
-# ---------------------------------------------------------------------------
-
-def _parse_frontmatter(content: str) -> dict:
-    if not content.startswith("---"):
-        return {}
-    lines = content.split("\n")
-    close = None
-    for i, line in enumerate(lines[1:], 1):
-        if line.strip() == "---":
-            close = i
-            break
-    if close is None:
-        return {}
-    fields: dict = {}
-    for line in lines[1:close]:
-        if not line.strip() or line.strip().startswith("#"):
-            continue
-        if ":" in line:
-            key, _, val = line.partition(":")
-            fields[key.strip()] = val.strip()
-    return fields
-
 
 def _parse_body(content: str) -> str:
     """Return body text (after closing frontmatter ---)."""
@@ -122,7 +104,7 @@ def _find_members(change_id: str, since: Optional[date]) -> list[dict]:
         except OSError:
             continue
 
-        fields = _parse_frontmatter(content)
+        fields = parse_frontmatter(content)
         if fields.get("change_id", "").strip() == change_id:
             members.append({
                 "fname":   entry,
@@ -495,89 +477,25 @@ def _check_d5_d8(members: list[dict], since: Optional[date]) -> list[str]:
     return relevant[:10]  # cap to avoid noise-flooding the report
 
 # ---------------------------------------------------------------------------
-# D7: plug-in dispatch
+# D7: removed in 0.4.0
 # ---------------------------------------------------------------------------
 
-def _load_plugins() -> list[dict]:
-    """Load e2e-plugins.yaml. Returns empty list if missing/empty/unparseable."""
-    if not os.path.exists(PLUGINS_YAML):
-        return []
-    try:
-        import yaml  # optional dependency — gracefully degrade if absent
-        with open(PLUGINS_YAML, "r", encoding="utf-8") as f:
-            data = yaml.safe_load(f)
-        if isinstance(data, dict):
-            plugins = data.get("plugins") or []
-            return [p for p in plugins if isinstance(p, dict) and p.get("name")]
-    except Exception:
-        pass
+# D7 used to load Meta/qa/e2e-plugins.yaml from the scanned vault and run each
+# plug-in's "cmd" through the shell, so the scanned directory chose both the
+# command and its arguments. No manifest was ever shipped, which made it a
+# speculative feature with a shell sink attached. It is gone. wulong still runs
+# vault-resident scripts by name, by design; see SECURITY.md.
 
-    # YAML not available or parse error — try minimal hand-parser for the empty case
-    try:
-        with open(PLUGINS_YAML, "r", encoding="utf-8") as f:
-            content = f.read()
-        if re.search(r"^plugins:\s*\[\]", content, re.MULTILINE):
-            return []
-    except OSError:
-        pass
-
-    return []
+_D7_DETAIL = (
+    "plug-in dispatch removed in 0.4.0: it built a shell command string from a "
+    "manifest inside the scanned vault. No project plug-ins exist, so D7 is "
+    "always N/A. See SECURITY.md."
+)
 
 
-def _check_d7(members: list[dict], plugins: list[dict], change_id: str) -> tuple[str, str]:
-    """Return (status, detail): 'NA' if no plug-in matches; 'PASS'/'FAIL' otherwise."""
-    if not plugins:
-        return "NA", "no project plug-in manifest or no plug-ins registered (v1 — all N/A)"
-
-    # Collect all claimed file paths from members
-    all_claimed_paths: list[str] = []
-    for m in members:
-        paths, _ = _extract_files_written(m["body"])
-        all_claimed_paths.extend(paths)
-        # Also include raw body text for trigger matching
-        all_claimed_paths.append(m["body"])
-
-    matched_plugins = []
-    for plugin in plugins:
-        triggers = plugin.get("trigger", [])
-        if isinstance(triggers, str):
-            triggers = [triggers]
-        if any(
-            trigger in text
-            for trigger in triggers
-            for text in all_claimed_paths
-        ):
-            matched_plugins.append(plugin)
-
-    if not matched_plugins:
-        return "NA", "no project plug-in matched (agent-system change or no triggers in claimed files)"
-
-    results = []
-    for plugin in matched_plugins:
-        cmd_template = plugin.get("cmd", "")
-        cmd_str = cmd_template.replace("{repo}", VAULT_ROOT).replace("{change_id}", change_id)
-        try:
-            result = subprocess.run(
-                cmd_str,
-                shell=True,
-                capture_output=True,
-                text=True,
-                timeout=120,
-            )
-            if result.returncode == 0:
-                results.append(("PASS", plugin["name"], ""))
-            else:
-                detail = (result.stdout + result.stderr).strip()
-                results.append(("FAIL", plugin["name"], detail[:200]))
-        except Exception as e:
-            results.append(("FAIL", plugin["name"], str(e)))
-
-    any_fail = any(r[0] == "FAIL" for r in results)
-    detail = "; ".join(
-        f"{name}: {status}" + (f" — {det}" if det else "")
-        for status, name, det in results
-    )
-    return ("FAIL" if any_fail else "PASS"), detail
+def _check_d7() -> tuple[str, str]:
+    """Always ('NA', reason). The plug-in dispatch was removed in 0.4.0."""
+    return "NA", _D7_DETAIL
 
 # ---------------------------------------------------------------------------
 # Report formatting
@@ -696,8 +614,8 @@ def _format_report(
 
     if verdict == "GREEN":
         lines.append("RESULT: All HARD criteria pass. The change is DONE (workflow loop closed).")
-        lines.append("NOTE: v1 GREEN means: recorded + gated + artifacts exist. It does NOT mean the")
-        lines.append("      trading bot is correct — that requires D7 project plug-ins (Phase 1.3b+).")
+        lines.append("NOTE: GREEN means: recorded + gated + artifacts exist. It does NOT mean the")
+        lines.append("      project's own tests passed. Run those yourself.")
     else:
         lines.append(f"WHAT TO DO: {hard_fails} HARD failure{'s' if hard_fails != 1 else ''}. "
                      f"The change is NOT done until all HARD criteria pass.")
@@ -784,6 +702,12 @@ def _build_json(
 # CLI
 # ---------------------------------------------------------------------------
 
+# change_id reaches an escaped regex in _check_d6 and list argv in the child
+# validators, never a shell string. This bound is hygiene, not a sandbox: keep
+# the value a plain token so a path fragment cannot ride in from frontmatter.
+_CHANGE_ID_RE = re.compile(r"(?!-)(?!\.\.?$)[A-Za-z0-9._-]{1,200}")
+
+
 def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description="verify-change.py — end-to-end DoD verifier for one change_id."
@@ -826,8 +750,13 @@ def main(argv: Optional[list[str]] = None) -> int:
     args = parse_args(argv)
 
     change_id = args.change_id.strip()
-    if not change_id:
-        print("ERROR: --change-id must be a non-empty string", file=sys.stderr)
+    if not _CHANGE_ID_RE.fullmatch(change_id):
+        print(
+            "ERROR: --change-id must be 1 to 200 characters drawn from "
+            "[A-Za-z0-9._-], must not start with '-', and must not be '.' "
+            f"or '..'; got {change_id!r}",
+            file=sys.stderr,
+        )
         return 2
 
     if not os.path.isdir(RECEIPTS):
@@ -873,9 +802,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     # ---- D6: graph gates ----------------------------------------------------
     d6_status, d6_verdict, d6_detail = _check_d6(change_id, members, since)
 
-    # ---- D7: plug-ins -------------------------------------------------------
-    plugins = _load_plugins()
-    d7_status, d7_detail = _check_d7(members, plugins, change_id)
+    # ---- D7: removed in 0.4.0 -----------------------------------------------
+    d7_status, d7_detail = _check_d7()
 
     # ---- Aggregate verdict --------------------------------------------------
     hard_fail = any([

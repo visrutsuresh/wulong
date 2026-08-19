@@ -66,12 +66,29 @@ def _run_step(label: str, cmd: list[str]) -> tuple[int, str]:
         return 1, f"NOT FOUND: {e}"
 
 
+# doctor exits 0 for PARTIAL and for ADVISORY on purpose, so an exit code of 0
+# does not mean the run was clean and keying on it alone relabels a skipped or
+# warned run as [OK]. It also printed the indented SKIP list AFTER the verdict,
+# so the last-non-blank-line snippet showed a SKIP line under an [OK] label.
+_NOT_CLEAN_VERDICTS = ("RED vault-health", "PARTIAL vault-health", "ADVISORY vault-health")
+
+
+def _not_clean_verdict(output: str) -> str | None:
+    """The verdict line of a sub-script that ran but did not come back clean."""
+    for line in reversed([l for l in output.splitlines() if l.strip()]):
+        if line.startswith(_NOT_CLEAN_VERDICTS):
+            return line
+    return None
+
+
 def _summarise(label: str, rc: int, output: str) -> str:
-    status = "OK" if rc == 0 else "WARN"
-    # Extract a one-line summary: last non-blank line of output
+    verdict = _not_clean_verdict(output)
+    status = "OK" if rc == 0 and verdict is None else "WARN"
+    # Prefer the verdict line over the last non-blank line, which for a PARTIAL
+    # run is an indented SKIP and reads as though it were the summary.
     lines = [l for l in output.splitlines() if l.strip()]
-    snippet = lines[-1][:120] if lines else "(no output)"
-    return f"  [{status}] {label}: {snippet}"
+    snippet = verdict or (lines[-1] if lines else "(no output)")
+    return f"  [{status}] {label}: {snippet[:120]}"
 
 
 def run_full(demo: bool = False) -> int:
@@ -119,7 +136,7 @@ def run_full(demo: bool = False) -> int:
 
     for label, cmd in _SCRIPTS:
         rc, output = _run_step(label, cmd)
-        if rc != 0:
+        if rc != 0 or _not_clean_verdict(output) is not None:
             overall_ok = False
         summaries.append(_summarise(label, rc, output))
         # Print verbose output indented

@@ -36,11 +36,47 @@ is_excluded() {
   return 1
 }
 
-LICENSE_FILE="$REPO_ROOT/LICENSE"
+# Deny-list line format: optional leading [tag] sigils, then the regex, then an
+# optional inline trailing comment. The sigils LEAD the line because the comment
+# is stripped before the line is used as a regex; a tag parked in the comment
+# would be stripped with it. Passing the comment through to grep is what made
+# this scan match nothing at all before 0.3.0.
+# Only an [allow-...] token counts as a sigil, so a pattern that legitimately
+# opens with a bracket expression is not mistaken for a tagged line.
+# The same two helpers exist in check (c) of scripts/pre-publish-assert.sh.
+# Fixing one script and not the other leaves the other one inert.
+denylist_tags() {
+  printf '%s' "$1" | sed -nE 's/^(([[:space:]]*\[allow-[a-z]+\])+).*$/\1/p'
+}
+denylist_regex() {
+  printf '%s' "$1" | sed -E 's/^([[:space:]]*\[allow-[a-z]+\])+[[:space:]]*//; s/[[:space:]]+#.*$//; s/[[:space:]]*$//'
+}
 
-while IFS= read -r pattern; do
-  # Skip blank lines and comments
-  [[ -z "$pattern" || "$pattern" == \#* ]] && continue
+while IFS= read -r raw; do
+  # Skip blank lines and whole-line comments
+  [[ -z "$raw" || "$raw" == \#* ]] && continue
+
+  # Deny-lists written before 0.3.0 put the tag inside the trailing comment,
+  # where it is now stripped along with the comment. Say so out loud rather than
+  # silently changing what that line means.
+  if [[ "$raw" == *"#"*"[allow-"* ]]; then
+    echo "WARN: deny-list tag is inside a comment and will be ignored." >&2
+    echo "      Move it to the front of the line: $raw" >&2
+  fi
+
+  tags="$(denylist_tags "$raw")"
+
+  # [allow-public] is the only tag this scan honours. It means the value is
+  # public by construction (a published repo URL, an attribution line), so it is
+  # expected inside tracked files. [allow-author] exempts the commit-author
+  # check in pre-publish-assert.sh and has no effect here: a name you commit
+  # under is still blocked from appearing inside a file.
+  if [[ "$tags" == *"[allow-public]"* ]]; then
+    continue
+  fi
+
+  pattern="$(denylist_regex "$raw")"
+  [[ -z "$pattern" ]] && continue
 
   # Search files (exclude .git dir)
   while IFS= read -r -d '' filepath; do
@@ -52,22 +88,10 @@ while IFS= read -r pattern; do
       continue
     fi
 
-    # For the LICENSE file: allow the single copyright line through, flag anything else
-    if [[ "$filepath" == "$LICENSE_FILE" ]]; then
-      matches=$(grep -nEi "$pattern" "$filepath" 2>/dev/null || true)
-      # Remove any copyright line from matches (generic: year + any name)
-      filtered=$(echo "$matches" | grep -vE '^[0-9]+:Copyright \(c\) [0-9]{4} .+$' || true)
-      if [[ -n "$filtered" ]]; then
-        echo "SCRUB HIT: $filepath"
-        while IFS= read -r line; do printf "  pattern=%s match: %s\n" "$pattern" "$line"; done <<< "$filtered"
-        FOUND=1
-      fi
-    else
-      if grep -nEi "$pattern" "$filepath" 2>/dev/null | grep -q .; then
-        echo "SCRUB HIT: $filepath"
-        grep -nEi "$pattern" "$filepath" | while IFS= read -r line; do printf "  pattern=%s match: %s\n" "$pattern" "$line"; done
-        FOUND=1
-      fi
+    if grep -nEi "$pattern" "$filepath" 2>/dev/null | grep -q .; then
+      echo "SCRUB HIT: $filepath"
+      grep -nEi "$pattern" "$filepath" | while IFS= read -r line; do printf "  pattern=%s match: %s\n" "$pattern" "$line"; done
+      FOUND=1
     fi
   done < <(find "$SCAN_PATH" -not -path '*/.git/*' -type f -print0)
 

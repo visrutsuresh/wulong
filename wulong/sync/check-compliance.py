@@ -48,13 +48,18 @@ import sys
 from datetime import date, datetime, timezone
 from pathlib import Path
 
+from wulong._root import child_env, resolve_root
+
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-META_DIR = SCRIPT_DIR.parent
-VAULT = META_DIR.parent
+# Install-relative FLOOR only, reached when no root was handed down. This script
+# runs as a child of an entry point, which passes the resolved root in the
+# environment, so this tier fires only on direct manual invocation.
+VAULT = Path(resolve_root(fallback=str(SCRIPT_DIR.parent.parent), tool="check-compliance"))
+META_DIR = VAULT / "Meta"
 
 RULE_REGISTRY   = META_DIR / "compliance" / "rule-registry.yaml"
 BASELINE_FILE   = META_DIR / "compliance" / "enforcement-baseline.json"
@@ -231,6 +236,7 @@ def _run_sweep() -> bool:
         return False
     proc = subprocess.run(
         [sys.executable, str(ENFORCEMENT_SWEEP)],
+        env=child_env(str(VAULT)),
         capture_output=True,
         text=True,
         timeout=30,
@@ -263,6 +269,7 @@ def _run_verify_change(change_ids: list[str]) -> tuple[bool, list[str]]:
             capture_output=True,
             text=True,
             timeout=30,
+            env=child_env(str(VAULT)),
         )
         output = proc.stdout + proc.stderr
         if "RED" in output or proc.returncode != 0:
@@ -500,6 +507,19 @@ def main() -> int:
     # MECH-003: a RED verify-change is a new block violation (not in baseline by definition)
     if has_mech003_fail:
         has_new_block = True
+
+    # STRICT-FREE verdict, printed unconditionally and parsed by session-pulse.py.
+    # The exit code below cannot carry this: it returns 1 for a new block
+    # violation only under --strict, so in the default mode a caller reading the
+    # exit code sees "clean" while this line says RED. One of the two has to be
+    # honest in every mode, and it is this one.
+    if drift_found:
+        verdict, why = "RED", "block-set drift"
+    elif has_new_block:
+        verdict, why = "RED", "new block-severity violation"
+    else:
+        verdict, why = "GREEN", "no new block-severity violation, no drift"
+    print(f"COMPLIANCE-VERDICT: {verdict} ({why})")
 
     if drift_found:
         return 1  # always non-zero on drift (regardless of --strict)

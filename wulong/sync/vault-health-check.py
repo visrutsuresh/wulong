@@ -2,15 +2,37 @@
 """
 vault-health-check.py — read-only vault health scanner.
 
-Checks:
+Checks (all NINE of them; the list used to stop at F while the code defined
+check_a through check_h, so two axes could skip without anyone noticing):
   A inbox_backlog       B stray_code        C handoff_backlog
   D orphan_notes        E empty_folder      F broken_wikilink
+  G drift_delta         H warden_validator  I hook_health
 
-Exit 0 = no RED.  Exit 1 = one or more RED checks.
-YELLOW never changes exit code.
+Every run reports three separate counts, PASSED / SKIPPED / FAILED. An axis is
+SKIPPED when it cannot run at all, for example when the allow-list it needs is
+absent. A skip is NOT a pass and is NOT a failure:
+
+  FAILED > 0                            -> RED,      exit 1
+  FAILED = 0, SKIPPED > 0               -> PARTIAL,  exit 0  (1 with --require-all-axes)
+  FAILED = 0, SKIPPED = 0, advisory     -> ADVISORY, exit 0
+  FAILED = 0, SKIPPED = 0, all silent   -> GREEN,    exit 0
+
+A correctly installed fresh vault legitimately cannot run four of the nine
+axes, so exiting non-zero on a skip would fail the quickstart. Printing the
+all-checks-passed line while four axes never ran is the false green this
+replaces. YELLOW/WARNING never changes the exit code, for the same reason: a
+pristine `wulong init --with-hooks` emits WARNING [I] on every run until the
+first turn ends, so reddening it would fail the shipped quickstart. It does
+change the VERDICT, because a run carrying warnings is not a run where every
+check came back clean, and ADVISORY is the token for that.
+
+Measured, not assumed: a default `wulong init` skips B, G, H and I. Passing
+`--with-hooks` at init time wires the hook and drops that to three, because I
+then has something to report on.
 
 Usage:
-  python3 vault-health-check.py [vault_root]
+  python3 vault-health-check.py [--root PATH] [--require-all-axes]
+  python3 vault-health-check.py [vault_root]        # legacy positional
   python3 vault-health-check.py --selftest
 """
 
@@ -18,9 +40,14 @@ import os
 import re
 import sys
 import json
+import argparse
+import datetime
 import tempfile
 import pathlib
 import subprocess
+from typing import NamedTuple
+
+from wulong._root import ENV_VAR, RootNotFound, resolve_root
 
 # ---------------------------------------------------------------------------
 # Vault root resolution
@@ -37,6 +64,28 @@ def find_vault_root(start: pathlib.Path) -> pathlib.Path:
             break
         current = parent
     raise FileNotFoundError(f"CLAUDE.md not found walking up from {start}")
+
+
+# ---------------------------------------------------------------------------
+# Axis skips
+# ---------------------------------------------------------------------------
+
+# One constructor and one prefix for every skip in the file. The five skip sites
+# used to emit WARNING lines indistinguishable from real warnings, so a skipped
+# axis was counted as a pass and the verdict printed green over it.
+SKIP_PREFIX = "SKIP"
+
+# The advisory class, inventoried off the emit sites rather than off whichever
+# prefix a reproduction happened to show. Both land in the `passed` bucket, so a
+# predicate written against "WARNING" alone leaves the YELLOW arm laundered.
+# ponytail: a two-string tuple, not a severity enum. Upgrade path = a real
+#           severity type, once a third class exists or one needs an exit code.
+ADVISORY_PREFIXES = ("YELLOW", "WARNING")
+
+
+def _skip(axis: str, name: str, needs: str) -> list[str]:
+    """One skipped axis, naming what it would need in order to run."""
+    return [f"{SKIP_PREFIX} [{axis}] {name}: axis skipped, needs {needs}"]
 
 
 # ---------------------------------------------------------------------------
@@ -194,7 +243,7 @@ def check_a_inbox_backlog(vault: pathlib.Path) -> list[str]:
 def check_b_stray_code(vault: pathlib.Path) -> list[str]:
     allow_list, source = load_stray_allow_list(vault)
     if allow_list is None:
-        return ["WARNING [B] stray_code: allow-list absent from both vault-structure.md and vault-health-thresholds.json — axis skipped (fail-open)"]
+        return _skip("B", "stray_code", "a stray_code_allow_list in Meta/vault-structure.md or Meta/sync/vault-health-thresholds.json")
 
     strays = []
     for fpath in _iter_code(vault, _STRAY_DIRS):
@@ -434,7 +483,7 @@ def check_g_drift_delta(vault: pathlib.Path) -> list[str]:
     H = _get_drift_high(vault)
 
     if H is None:
-        return ["WARNING [G] drift_delta: drift-scan unavailable or timed out — axis skipped"]
+        return _skip("G", "drift_delta", "a runnable Meta/sync/drift-scan.py")
 
     # Load or seed baseline
     if baseline_path.exists():
@@ -482,24 +531,33 @@ def check_h_warden_validator(vault: pathlib.Path) -> list[str]:
     import importlib.util
     cer_path = vault / "Meta" / "sync" / "check-enforcement-rules.py"
     if not cer_path.exists():
-        return ["WARNING [H] warden_validator: check-enforcement-rules.py not found — axis skipped"]
+        return _skip("H", "warden_validator", "Meta/sync/check-enforcement-rules.py")
 
     spec = importlib.util.spec_from_file_location("check_enforcement_rules", cer_path)
     mod = importlib.util.module_from_spec(spec)
     try:
         spec.loader.exec_module(mod)
     except Exception as exc:
-        return [f"WARNING [H] warden_validator: import error ({exc}) — axis skipped"]
+        return _skip("H", "warden_validator", f"an importable check-enforcement-rules.py (import error: {exc})")
 
     try:
         result = mod.check(repo_root=vault)
     except Exception as exc:
-        return [f"WARNING [H] warden_validator: check() error ({exc}) — axis skipped"]
+        return _skip("H", "warden_validator", f"a working check-enforcement-rules.check() (error: {exc})")
 
     present = result.get("present", [])
     missing = result.get("missing", [])
     N = len(present) + len(missing)
     M = len(present)
+    if N == 0:
+        # check() returns all-empty for BOTH "no rulebook" and "a rulebook with
+        # no mechanical rows", and the old `if missing:` read that as clean. An
+        # inventory of nothing is not an inventory that found nothing wrong.
+        if not (vault / "Meta" / "enforcement-rules.md").exists():
+            return _skip("H", "warden_validator", "Meta/enforcement-rules.md")
+        return ["WARNING [H] warden_validator: Meta/enforcement-rules.md declares "
+                "zero mechanical enforcers, so this axis inventoried nothing. "
+                "That is not the same as finding nothing wrong."]
     lines = []
     if missing:
         lines.append(
@@ -511,23 +569,158 @@ def check_h_warden_validator(vault: pathlib.Path) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
+# Check I: hook_health (the opt-in Stop hook)
+# Colon, not the long dash the A to H banners above use: no hand-written line
+# added by this change may carry U+2014, and the delivery gate this axis reports
+# on is the reason why.
+# ---------------------------------------------------------------------------
+
+# Kept in step with wulong-init.py by tests/test_hook_wiring.py, which reads the
+# hook's own HOOK_EVENT constant by AST.
+_HOOK_SETTINGS_REL = ".claude/settings.json"
+_HOOK_LOG_REL = ".wulong/hook-events.jsonl"
+_HOOK_EVENT = "Stop"
+_HOOK_WINDOW_DAYS = 7
+
+
+def _hook_is_wired(vault: pathlib.Path) -> bool:
+    settings = vault / _HOOK_SETTINGS_REL
+    if not settings.is_file():
+        return False
+    try:
+        data = json.loads(settings.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return bool(data.get("hooks", {}).get(_HOOK_EVENT))
+
+
+def check_i_hook_health(vault: pathlib.Path) -> list[str]:
+    """Report on the opt-in hook: wired, firing, and how often it failed open.
+
+    THE SKIP IS THE POINT FOR A DECLINED INSTALL. Hook wiring is opt-in, so a
+    user who never passed --with-hooks made a deliberate choice, and a red cross
+    over a deliberate choice is how a health check teaches people to ignore it.
+    A SKIP is neither a pass nor a failure and does not move the exit code.
+
+    THE WARNING IS THE POINT FOR AN ACCEPTED ONE. Every non-blocking path in the
+    hook is a bare return, so a hook that fails open prints nothing, and a hook
+    that never fires prints nothing either. The heartbeat separates them: no
+    records at all means NEVER FIRED (stale path, or killed by the timeout),
+    records mean it fired.
+
+    A WRONG EVENT is the third state and it is NOT silence. The hook reads the
+    incoming event name and refuses to act on one it does not handle, recording
+    the name it actually received, so a mis-wired settings entry shows up here as
+    itself rather than as a healthy log over a dead gate.
+    """
+    if not _hook_is_wired(vault):
+        return _skip("I", "hook_health",
+                     f"an opted-in hook wiring in {_HOOK_SETTINGS_REL} "
+                     "(run `wulong init --with-hooks`)")
+
+    log = vault / _HOOK_LOG_REL
+    if not log.is_file():
+        return [f"WARNING [I] hook_health: {_HOOK_EVENT} hook is wired but has "
+                f"NEVER FIRED. No {_HOOK_LOG_REL}. Either no turn has ended since "
+                "you wired it, or the command path is stale."]
+
+    cutoff = (datetime.datetime.now(datetime.timezone.utc)
+              - datetime.timedelta(days=_HOOK_WINDOW_DAYS)).isoformat()
+    recent_failopen: dict[str, int] = {}
+    recent_wrong_event: dict[str, int] = {}
+    fired = 0
+    for line in log.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            record = json.loads(line)
+        except ValueError:
+            continue
+        fired += 1
+        if str(record.get("ts", "")) < cutoff:
+            continue
+        if record.get("outcome") == "failopen":
+            key = f"{record.get('hook', '?')}/{record.get('error', '?')}"
+            recent_failopen[key] = recent_failopen.get(key, 0) + 1
+        elif record.get("reason") == "wrong_event":
+            key = str(record.get("event", "?"))
+            recent_wrong_event[key] = recent_wrong_event.get(key, 0) + 1
+
+    if not fired:
+        return [f"WARNING [I] hook_health: {_HOOK_EVENT} hook is wired and "
+                f"{_HOOK_LOG_REL} exists but holds no records. NEVER FIRED."]
+    lines: list[str] = []
+    if recent_wrong_event:
+        detail = ", ".join(f"{k} x{v}" for k, v in sorted(recent_wrong_event.items()))
+        lines.append(f"WARNING [I] hook_health: invoked for an event it does not "
+                     f"handle ({detail}) in the last {_HOOK_WINDOW_DAYS} days. "
+                     f"Something in {_HOOK_SETTINGS_REL} points a "
+                     f"non-{_HOOK_EVENT} event at this hook, and it did nothing "
+                     "on those turns.")
+    if recent_failopen:
+        detail = ", ".join(f"{k} x{v}" for k, v in sorted(recent_failopen.items()))
+        lines.append(f"WARNING [I] hook_health: failed open "
+                     f"{sum(recent_failopen.values())} time(s) in the last "
+                     f"{_HOOK_WINDOW_DAYS} days ({detail}). The hook ran and gave "
+                     "up; delivery was never checked on those turns.")
+    return lines
+
+
+# ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
 
-def run_checks(vault: pathlib.Path) -> tuple[list[str], int]:
+class HealthReport(NamedTuple):
+    """Structured result. Three counts, never collapsed into one verdict."""
+    lines: list[str]
+    red_count: int      # RED LINES, which is what the operator sees listed
+    passed: int         # axes that ran and found nothing red
+    skipped: int        # axes that could not run at all
+    failed: int         # axes that ran and found something red
+    skips: list[str]    # one line per skipped axis, naming what it needs
+    advisories: list[str]  # YELLOW/WARNING lines; they pass, they are not clean
+
+
+def run_checks(vault: pathlib.Path) -> HealthReport:
+    """Run all nine axes and attribute every line to the axis that produced it.
+
+    Attribution is why this returns a structure rather than one flat list: the
+    old caller counted RED lines and called everything else a pass, which is how
+    three skipped axes printed as "all checks passed".
+    """
     thresholds = load_thresholds(vault)
+    axes = [
+        check_a_inbox_backlog(vault),
+        check_b_stray_code(vault),
+        check_c_handoff_backlog(vault, thresholds),
+        check_d_orphan_notes(vault),
+        check_e_empty_folder(vault),
+        check_f_broken_wikilink(vault),
+        check_g_drift_delta(vault),
+        check_h_warden_validator(vault),
+        check_i_hook_health(vault),
+    ]
+
     results: list[str] = []
-    results += check_a_inbox_backlog(vault)
-    results += check_b_stray_code(vault)
-    results += check_c_handoff_backlog(vault, thresholds)
-    results += check_d_orphan_notes(vault)
-    results += check_e_empty_folder(vault)
-    results += check_f_broken_wikilink(vault)
-    results += check_g_drift_delta(vault)
-    results += check_h_warden_validator(vault)
+    passed = skipped = failed = 0
+    skips: list[str] = []
+    for axis_lines in axes:
+        results += axis_lines
+        if any(line.startswith("RED") for line in axis_lines):
+            failed += 1
+        elif any(line.startswith(SKIP_PREFIX) for line in axis_lines):
+            skipped += 1
+            skips += [line for line in axis_lines if line.startswith(SKIP_PREFIX)]
+        else:
+            passed += 1
 
     red_count = sum(1 for line in results if line.startswith("RED"))
-    return results, red_count
+    # Collected off every axis, not only the ones that landed in `passed`: a
+    # warning is a warning wherever it came from. The verdict only consults this
+    # when nothing failed and nothing skipped, so the wider collection is free.
+    advisories = [line for line in results if line.startswith(ADVISORY_PREFIXES)]
+    return HealthReport(results, red_count, passed, skipped, failed, skips, advisories)
 
 
 # ---------------------------------------------------------------------------
@@ -562,7 +755,7 @@ def selftest():
         # --- A: inbox > 10 should RED ---
         for i in range(11):
             (vault / "00-Inbox" / f"note{i}.md").write_text(f"# note {i}")
-        lines_a, _ = run_checks(vault)
+        lines_a = run_checks(vault).lines
         assert any("[A]" in l and "RED" in l for l in lines_a), "A: expected RED for 11 inbox items"
 
         # clean inbox down to 0
@@ -578,27 +771,30 @@ def selftest():
         # Write thresholds without allow-list so B is fail-open first
         thresholds_path = vault / "Meta" / "sync" / "vault-health-thresholds.json"
         thresholds_path.write_text('{"handoff_backlog_red": 1000}')
-        lines_b_open, _ = run_checks(vault)
-        assert any("WARNING" in l and "[B]" in l for l in lines_b_open), "B: expected WARNING when allow-list absent"
+        report_b_open = run_checks(vault)
+        lines_b_open = report_b_open.lines
+        assert any(l.startswith(SKIP_PREFIX) and "[B]" in l for l in lines_b_open), \
+            "B: expected a SKIP when the allow-list is absent"
+        assert report_b_open.skipped >= 1, "B: a skipped axis must be counted as skipped, not passed"
 
         # Add an allow-list that excludes SomeProject => stray should RED
         thresholds_path.write_text(json.dumps({
             "handoff_backlog_red": 1000,
             "stray_code_allow_list": ["02-Areas/Wulong/v3"]
         }))
-        lines_b_red, _ = run_checks(vault)
+        lines_b_red = run_checks(vault).lines
         assert any("[B]" in l and "RED" in l for l in lines_b_red), "B: expected RED for stray .py files"
 
         # --- C: handoff count within threshold ---
         (vault / "Meta" / "handoffs" / "some-handoff.md").write_text("# handoff")
-        lines_c, _ = run_checks(vault)
+        lines_c = run_checks(vault).lines
         assert not any("[C]" in l and "RED" in l for l in lines_c), "C: unexpected RED for 1 handoff"
 
         # --- E: empty folder should RED ---
         # 06-Meetings exists and is empty (no files except .gitkeep would count)
         # Add a real note to 01-Projects to avoid E firing there
         (vault / "01-Projects" / "SomeProject" / "index.md").write_text("# index")
-        lines_e, _ = run_checks(vault)
+        lines_e = run_checks(vault).lines
         # 06-Meetings, 07-Daily, etc. are empty — should have at least one RED E
         assert any("[E]" in l and "RED" in l for l in lines_e), "E: expected RED for empty folder"
 
@@ -606,7 +802,7 @@ def selftest():
         (vault / "01-Projects" / "SomeProject" / "linked.md").write_text(
             "See [[DoesNotExist]] for details."
         )
-        lines_f, _ = run_checks(vault)
+        lines_f = run_checks(vault).lines
         assert any("[F]" in l and "RED" in l for l in lines_f), "F: expected RED for broken wikilink"
 
         # Good wikilink should NOT appear
@@ -614,7 +810,7 @@ def selftest():
         (vault / "01-Projects" / "SomeProject" / "linker.md").write_text(
             "See [[target]] here."
         )
-        lines_good, _ = run_checks(vault)
+        lines_good = run_checks(vault).lines
         bad_linker = [l for l in lines_good if "linker" in l and "[F]" in l]
         assert not bad_linker, "F: [[target]] should resolve correctly"
 
@@ -625,25 +821,72 @@ def selftest():
 # Entry point
 # ---------------------------------------------------------------------------
 
-if __name__ == "__main__":
-    if "--selftest" in sys.argv:
+def _parse_args(argv: list[str]) -> argparse.Namespace:
+    p = argparse.ArgumentParser(
+        prog="wulong doctor",
+        description="Read-only vault health scanner (9 axes, A to I).",
+    )
+    p.add_argument("vault", nargs="?", default=None,
+                   help="Vault root (legacy positional; --root is preferred).")
+    p.add_argument("--root", default=None, metavar="PATH",
+                   help=f"Vault root. Wins over the {ENV_VAR} env var.")
+    p.add_argument("--require-all-axes", action="store_true",
+                   help="Exit non-zero when any axis was SKIPPED. Off by default, "
+                        "because a fresh vault cannot run four of the nine.")
+    p.add_argument("--selftest", action="store_true", help="Run the built-in fixture assertions.")
+    return p.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parse_args(sys.argv[1:] if argv is None else argv)
+
+    if args.selftest:
         selftest()
-        sys.exit(0)
+        return 0
 
-    # Vault root: argv[1] or walk up from this file
-    if len(sys.argv) > 1 and not sys.argv[1].startswith("--"):
-        vault = pathlib.Path(sys.argv[1])
-    else:
-        vault = find_vault_root(pathlib.Path(__file__).parent)
+    try:
+        vault = pathlib.Path(resolve_root(args.root or args.vault, tool="wulong doctor"))
+    except RootNotFound as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
 
-    lines, red_count = run_checks(vault)
+    report = run_checks(vault)
 
-    for line in lines:
+    for line in report.lines:
         print(line)
 
-    if red_count == 0:
-        print("GREEN vault-health: all checks passed")
-        sys.exit(0)
-    else:
-        print(f"RED vault-health: {red_count} check(s) failed")
-        sys.exit(1)
+    print(f"PASSED: {report.passed}  SKIPPED: {report.skipped}  FAILED: {report.failed}")
+
+    if report.failed:
+        print(f"RED vault-health: {report.failed} axis/axes failed ({report.red_count} red line(s))")
+        return 1
+
+    if report.skipped:
+        # A token of its own. Emitting the all-checks-passed line here is the
+        # false green: the axes that would have caught the problem never ran.
+        print(f"PARTIAL vault-health: {report.passed} axis/axes passed, "
+              f"{report.skipped} skipped, 0 failed. NOT a clean bill of health.")
+        for line in report.skips:
+            print(f"  {line}")
+        if args.require_all_axes:
+            print("RED vault-health: --require-all-axes was set and an axis was skipped")
+            return 1
+        return 0
+
+    if report.advisories:
+        # The outer half of the same defect Change D fixed for skips. A
+        # WARNING-only or YELLOW-only axis lands in `passed`, and the all-clear
+        # line was printed straight over it. Ranked BELOW the skip branch on
+        # purpose: PARTIAL is the stronger statement and its skip list has to
+        # keep printing.
+        print(f"ADVISORY vault-health: {report.passed} axis/axes passed, 0 skipped, "
+              f"0 failed, {len(report.advisories)} advisory line(s). "
+              "NOT a clean bill of health.")
+        return 0
+
+    print("GREEN vault-health: all checks passed")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

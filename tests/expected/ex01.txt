@@ -10,14 +10,23 @@ Initialising wulong vault at: <vault>
     Meta/knowledge-base/
     Meta/context/
     .wulong/
+  Installed 69 payload file(s).
   Copied 4 overlay file(s):
     brain.md.example -> Meta/brain.md
     env.example -> .env
     projects.json.example -> .wulong/projects.json
     scrub-patterns.txt.example -> scrub-patterns.txt
+  Added 4 overlay entr(y/ies) to .gitignore.
+  Hooks: not wired (pass --with-hooks to write .claude/settings.json).
 Done. Set WULONG_ROOT to this path in your shell or .env.
-WARNING [B] stray_code: allow-list absent from both vault-structure.md and vault-health-thresholds.json — axis skipped (fail-open)
-WARNING [G] drift_delta: drift-scan unavailable or timed out — axis skipped
-WARNING [H] warden_validator: check-enforcement-rules.py not found — axis skipped
-GREEN vault-health: all checks passed
+SKIP [B] stray_code: axis skipped, needs a stray_code_allow_list in Meta/vault-structure.md or Meta/sync/vault-health-thresholds.json
+SKIP [G] drift_delta: axis skipped, needs a runnable Meta/sync/drift-scan.py
+SKIP [H] warden_validator: axis skipped, needs Meta/sync/check-enforcement-rules.py
+SKIP [I] hook_health: axis skipped, needs an opted-in hook wiring in .claude/settings.json (run `wulong init --with-hooks`)
+PASSED: 5  SKIPPED: 4  FAILED: 0
+PARTIAL vault-health: 5 axis/axes passed, 4 skipped, 0 failed. NOT a clean bill of health.
+  SKIP [B] stray_code: axis skipped, needs a stray_code_allow_list in Meta/vault-structure.md or Meta/sync/vault-health-thresholds.json
+  SKIP [G] drift_delta: axis skipped, needs a runnable Meta/sync/drift-scan.py
+  SKIP [H] warden_validator: axis skipped, needs Meta/sync/check-enforcement-rules.py
+  SKIP [I] hook_health: axis skipped, needs an opted-in hook wiring in .claude/settings.json (run `wulong init --with-hooks`)
 example 01: PASS

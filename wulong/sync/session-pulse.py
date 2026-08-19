@@ -7,14 +7,23 @@ Delegates D1-D4 gate to verify-change.py (exit semantics preserved),
 then adds doc-consistency delta check, audit summary, and compliance check.
 
 Usage:
-  python3 Meta/sync/session-pulse.py --change-id <id> [--change-id <id2> ...] [--strict]
+  python3 Meta/sync/session-pulse.py --change-id <id> [--change-id <id2> ...]
+                                     [--root PATH] [--strict]
+                                     [--no-exit-nonzero-on-red]
 
 Exit codes:
-  0  — All verify-change checks GREEN (or RED in log-only mode) + no NEW doc drift
-       + no NEW block-severity compliance violations.
-  1  — One or more verify-change checks RED under --strict, OR new doc drift under
-       --strict, OR new block-severity compliance violation under --strict.
-  2  — Usage / infrastructure error.
+  0  All gates clear, or RED with --no-exit-nonzero-on-red.
+  1  RED verdict: verify-change RED, new doc drift, or a new block-severity
+     compliance violation. This is the DEFAULT now. --exit-nonzero-on-red is on
+     unless you turn it off, because a session-close gate that always exits 0 is
+     not a gate. --strict is unchanged and still governs what counts as failure
+     and how it is labelled, not just the exit code.
+  2  Usage or infrastructure error.
+
+Root resolution: --root, then WULONG_ROOT, then a marker above the working
+directory. The resolved root is handed to EVERY child process, both as a flag
+where the child has one and in the child environment, so the parent and its four
+children can never audit two different vaults.
 """
 
 import argparse
@@ -23,21 +32,39 @@ import os
 import re
 import subprocess
 import sys
+import pathlib
 from pathlib import Path
+
+from wulong._root import ENV_VAR, RootNotFound, child_env, resolve_root
 
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-META_DIR = SCRIPT_DIR.parent
-VAULT = META_DIR.parent
+# No install-relative vault constant lives here on purpose. This is an ENTRY
+# POINT, and in a wheel the install-relative path is site-packages, so guessing
+# it is the wrong-vault bug itself. The root is resolved in main() and handed to
+# every child, because this script fans out to four of them and used to pass the
+# root to exactly one.
 
 VERIFY_CHANGE    = SCRIPT_DIR / "verify-change.py"
 CHECK_DOC        = SCRIPT_DIR / "check-doc-consistency.py"
 SESSION_AUDIT    = SCRIPT_DIR / "session-close-audit.py"
 CHECK_COMPLIANCE = SCRIPT_DIR / "check-compliance.py"
+# NOT SCRIPT_DIR. The four constants above are CODE, shipped with the package
+# and correctly resolved next to this file. The baseline is per-vault DATA, and
+# reading it from the install directory meant `pulse --root B` compared vault B's
+# drift against whatever baseline happened to sit beside the installed engine.
+# Set from the resolved root in main().
 BASELINE_FILE    = SCRIPT_DIR / "doc-consistency-baseline.json"
+
+
+def _baseline_path(root: str) -> pathlib.Path:
+    return pathlib.Path(root) / "Meta" / "sync" / "doc-consistency-baseline.json"
+
+# Machine-readable, strict-free compliance verdict emitted by check-compliance.py.
+COMPLIANCE_VERDICT_PREFIX = "COMPLIANCE-VERDICT:"
 
 
 # ---------------------------------------------------------------------------
@@ -72,9 +99,24 @@ def parse_args() -> argparse.Namespace:
         help="change_id to verify (repeatable)",
     )
     p.add_argument(
+        "--root",
+        default=None,
+        metavar="PATH",
+        help=f"Vault root. Wins over the {ENV_VAR} env var. Handed to every child.",
+    )
+    p.add_argument(
         "--strict",
         action="store_true",
-        help="Exit non-zero on RED verdict or new doc drift (default: log-only)",
+        help="Treat RED as a HARD-BLOCK: changes what counts as failure in the "
+             "children and how it is labelled, not only the exit code",
+    )
+    p.add_argument(
+        "--exit-nonzero-on-red",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Exit 1 when the pulse verdict is ACTION REQUIRED (default: on). "
+             "Governs ONLY the exit code. Use --no-exit-nonzero-on-red for the "
+             "old log-only behaviour.",
     )
     return p.parse_args()
 
@@ -83,7 +125,7 @@ def parse_args() -> argparse.Namespace:
 # Step 1: verify-change.py delegation
 # ---------------------------------------------------------------------------
 
-def run_verify_change(change_ids: list[str], strict: bool) -> tuple[bool, list[dict]]:
+def run_verify_change(change_ids: list[str], strict: bool, root: str) -> tuple[bool, list[dict]]:
     """
     Run verify-change.py for each change_id.
     Returns (all_green: bool, results: list of {id, rc, output} dicts).
@@ -97,7 +139,7 @@ def run_verify_change(change_ids: list[str], strict: bool) -> tuple[bool, list[d
         if strict:
             cmd.append("--strict")
 
-        proc = subprocess.run(cmd, capture_output=True, text=True)
+        proc = subprocess.run(cmd, capture_output=True, text=True, env=child_env(root))
         output = proc.stdout + proc.stderr
         rc = proc.returncode
 
@@ -204,14 +246,14 @@ def _load_baseline() -> tuple[set[str], int]:
     return set(data.get("keys", [])), data.get("count", 0)
 
 
-def run_doc_consistency(strict: bool) -> tuple[bool, dict]:
+def run_doc_consistency(strict: bool, root: str) -> tuple[bool, dict]:
     """
     Run check-doc-consistency.py, compute delta vs baseline.
     Returns (ok: bool, info: dict with counts + new_keys list).
     """
     proc = subprocess.run(
         [sys.executable, str(CHECK_DOC)],
-        capture_output=True, text=True
+        capture_output=True, text=True, env=child_env(root)
     )
     output = proc.stdout + proc.stderr
 
@@ -235,11 +277,17 @@ def run_doc_consistency(strict: bool) -> tuple[bool, dict]:
 # Step 3: session-close-audit
 # ---------------------------------------------------------------------------
 
-def run_session_audit() -> str:
-    """Run session-close-audit.py --dry-run and return its summary line."""
+def run_session_audit(root: str) -> str:
+    """Run session-close-audit.py --dry-run and return its summary line.
+
+    The root arrives from main(), which resolved it once. It goes down both as
+    --root and in the environment: the flag because this child has one and a flag
+    beats the environment, the environment because everything this child spawns
+    in turn must land on the same vault.
+    """
     proc = subprocess.run(
-        [sys.executable, str(SESSION_AUDIT), "--dry-run"],
-        capture_output=True, text=True
+        [sys.executable, str(SESSION_AUDIT), "--dry-run", "--root", str(root)],
+        capture_output=True, text=True, env=child_env(root)
     )
     output = (proc.stdout + proc.stderr).strip()
     # Return last non-empty line as the summary
@@ -251,7 +299,7 @@ def run_session_audit() -> str:
 # Step 4: compliance (registry-driven, baseline-gated)
 # ---------------------------------------------------------------------------
 
-def run_compliance(change_ids: list[str], strict: bool) -> tuple[bool, str, list[str]]:
+def run_compliance(change_ids: list[str], strict: bool, root: str) -> tuple[bool, str, list[str]]:
     """
     Run check-compliance.py for each change_id.
     Returns (ok: bool, summary: str, output_lines: list[str]).
@@ -268,13 +316,21 @@ def run_compliance(change_ids: list[str], strict: bool) -> tuple[bool, str, list
     if strict:
         cmd.append("--strict")
 
-    proc = subprocess.run(cmd, capture_output=True, text=True)
+    proc = subprocess.run(cmd, capture_output=True, text=True, env=child_env(root))
     output = proc.stdout + proc.stderr
     rc = proc.returncode
     lines = [l for l in output.splitlines() if l.strip()]
 
-    # Determine OK: exit 0 = no new block violations + no drift
+    # rc is STRICT-TAINTED: check-compliance.py returns 1 for a new block
+    # violation only under --strict, so `rc == 0` silently means "clean" in the
+    # default mode even when there IS a new violation. The verdict line below is
+    # printed unconditionally by check-compliance.py for exactly this reason.
     ok = (rc == 0)
+    for ln in lines:
+        clean = _strip_ansi(ln).strip()
+        if clean.startswith(COMPLIANCE_VERDICT_PREFIX):
+            ok = clean.split(":", 1)[1].strip().startswith("GREEN")
+            break
 
     # Build a one-line summary from the output
     if ok:
@@ -311,8 +367,14 @@ def print_pulse(
     compliance_summary: str,
     compliance_lines: list[str],
     strict: bool,
-) -> None:
-    """Print the one-screen COMPANY PULSE summary."""
+) -> bool:
+    """Print the one-screen COMPANY PULSE summary and RETURN the verdict.
+
+    Returning it is the point. This function computes the only strict-free
+    verdict in the file, and while it was declared `-> None` main() could not
+    reach it, so main() keyed off the shadowed strict-tainted flags instead and
+    the printed verdict and the exit code could disagree.
+    """
     width = 72
     bar = "─" * width
 
@@ -329,11 +391,14 @@ def print_pulse(
         if r["verdict"] == "GREEN":
             label = GREEN("GREEN")
         elif r["verdict"] == "RED":
-            label = RED("RED") + (" [HARD-BLOCK]" if strict else " [log-only]")
+            # The old label here said log-only. Since 0.4.0 a RED fails the
+            # pulse and the process exits 1 unless --no-exit-nonzero-on-red is
+            # passed, so that label described a default that no longer exists.
+            label = RED("RED") + (" [HARD-BLOCK]" if strict else " [ACTION REQUIRED]")
         else:
             label = YELLOW("UNKNOWN")
         print(f"  change-id: {BOLD(r['id'])}")
-        print(f"  verdict:   {label}  (exit {r['rc']})")
+        print(f"  verdict:   {label}  (verify-change exit {r['rc']})")
         # Surface first 6 lines of verify output for context
         for line in r["output"].splitlines()[:6]:
             clean = _strip_ansi(line)
@@ -358,7 +423,10 @@ def print_pulse(
         if strict:
             print(f"  {RED('[HARD-BLOCK under --strict]')}")
         else:
-            print(f"  {YELLOW('[log-only — run without --strict to suppress exit code]')}")
+            # True in BOTH exit modes, which it has to be: the two modes print
+            # byte-identical output, so this text must describe the RULE and the
+            # rule's default, not whichever mode happens to be running.
+            print(f"  {YELLOW('[not a hard block. Exits 1 unless --no-exit-nonzero-on-red]')}")
     print(f"  {DIM(f'(current: {current_count}  baseline: {baseline_count})')}")
     print()
 
@@ -408,6 +476,7 @@ def print_pulse(
         print(BOLD(RED("  PULSE: ACTION REQUIRED")) + f"  — {', '.join(issues)}")
     print(bar)
     print()
+    return all_clear
 
 
 # ---------------------------------------------------------------------------
@@ -418,6 +487,15 @@ def main() -> int:
     args = parse_args()
     change_ids = args.change_ids or []
     strict = args.strict
+
+    try:
+        root = resolve_root(args.root, tool="wulong pulse")
+    except RootNotFound as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+
+    global BASELINE_FILE
+    BASELINE_FILE = _baseline_path(root)
 
     if not change_ids:
         print(RED("ERROR") + ": at least one --change-id required")
@@ -431,29 +509,40 @@ def main() -> int:
 
     print(BOLD("=== session-pulse: starting close checks ==="))
     print(f"change-ids: {', '.join(change_ids)}")
+    print(f"root:       {root}")
     print(f"strict:     {strict}")
     print()
 
     # Step 1: verify-change (D1-D4)
-    vc_ok, vc_results = run_verify_change(change_ids, strict)
+    # NAMED _strict: these two are the strict-TAINTED returns. They are correct
+    # for the --strict exit branch and wrong for anything else, and the old
+    # unsuffixed names shadowed the strict-free verdict computed in print_pulse.
+    vc_ok_strict, vc_results = run_verify_change(change_ids, strict, root)
 
     # Step 2: doc-consistency delta
-    doc_ok, doc_info = run_doc_consistency(strict)
+    doc_ok_strict, doc_info = run_doc_consistency(strict, root)
 
     # Step 3: audit
     # Note: session-close-audit.py runs inside enforcement-sweep.py (called by check-compliance.py).
     # We call it here directly so section 3 has a standalone summary; check-compliance reuses
     # the sweep report rather than re-invoking session-close-audit independently.
-    audit_summary = run_session_audit()
+    audit_summary = run_session_audit(root)
 
     # Step 4: compliance (registry-driven, baseline-gated)
-    compliance_ok, compliance_summary, compliance_lines = run_compliance(change_ids, strict)
+    compliance_ok, compliance_summary, compliance_lines = run_compliance(change_ids, strict, root)
 
-    # Print pulse
-    print_pulse(vc_results, doc_info, audit_summary, compliance_ok, compliance_summary, compliance_lines, strict)
+    # Print pulse, and take the verdict it computed rather than recomputing it
+    all_clear = print_pulse(
+        vc_results, doc_info, audit_summary, compliance_ok,
+        compliance_summary, compliance_lines, strict,
+    )
 
-    # Exit code: strict → non-zero if any gate failed
-    if strict and (not vc_ok or not doc_ok or not compliance_ok):
+    # --strict is unchanged: same inputs, same branch, same meaning.
+    if strict and (not vc_ok_strict or not doc_ok_strict or not compliance_ok):
+        return 1
+
+    # The default. A RED verdict exits non-zero unless explicitly told not to.
+    if args.exit_nonzero_on_red and not all_clear:
         return 1
     return 0
 

@@ -21,7 +21,13 @@ import glob
 import argparse
 from pathlib import Path
 
-VAULT = Path(__file__).resolve().parent.parent.parent
+from wulong._root import resolve_root
+
+# Install-relative FLOOR only, reached when no root was handed down. This script
+# runs as a child of an entry point, which passes the resolved root in the
+# environment, so this tier fires only on direct manual invocation.
+VAULT = Path(resolve_root(fallback=str(Path(__file__).resolve().parent.parent.parent),
+                          tool="check-doc-consistency"))
 META = VAULT / "Meta"
 AGENTS_GLOB = str(VAULT / ".claude" / "agents" / "*.md")
 
