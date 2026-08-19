@@ -31,7 +31,6 @@ ponytail: two directory listings and a set intersection. No fixtures.
 """
 import pathlib
 
-import pytest
 
 _REPO = pathlib.Path(__file__).resolve().parent.parent
 _VAULT_SYNC = _REPO / "Meta" / "sync"
@@ -40,13 +39,6 @@ _PACKAGE_SYNC = _REPO / "wulong" / "sync"
 _AUDIT_CONFIG_NAME = "session-close-audit-config.json"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    # DELETE THIS DECORATOR IN THE SAME COMMIT AS THE git rm. strict=True fails
-    # on SUCCESS, so the delete alone flips this to XPASS(strict) and reds the
-    # suite. See the module docstring: C0 is merge + delete + marker removal.
-    reason="C0 delete half not landed: the 7 superseded Meta/sync/ copies are still tracked",
-)
 def test_no_script_exists_in_both_sync_directories() -> None:
     """A filename in both directories is a fork waiting to happen."""
     if not _VAULT_SYNC.is_dir():
